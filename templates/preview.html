@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bozza — {{ row.azienda }}</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
+    <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
+  </a>
+  <nav class="nav"><a href="/">Campagne</a><a href="/logout">Esci</a></nav>
+</header>
+
+<div class="wrap" style="max-width:900px">
+  <div class="card">
+    <div class="row spread">
+      <h3 style="margin:0">{{ row.azienda }}</h3>
+      <span class="tag {{ row.stato }}">{{ row.stato }}</span>
+    </div>
+    <div class="hint" style="margin:8px 0 12px">A: <b>{{ row.email }}</b> · Flag: <span class="tag {{ row.flag }}">{{ row.flag }}</span></div>
+    <div class="subj"><span>Oggetto:</span> {{ subject }}</div>
+    <iframe class="mail" src="/preview-html/{{ i }}" title="Anteprima email"></iframe>
+    <details style="margin-top:14px"><summary>Vedi versione testo</summary><pre class="body">{{ body }}</pre></details>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Modifica testo email</h3>
+    <p class="hint">Correggi saluto e parte personalizzata di questa email. Il testo comune (uguale per tutte)
+      si modifica da <a class="link-gold" href="/testo">Testo email generale</a>.</p>
+    <form method="post" action="/apertura/{{ i }}">
+      <input type="hidden" name="back" value="/preview/{{ i }}">
+      <label>Saluto</label>
+      <input name="saluto" value="{{ row.saluto }}">
+      <div style="height:10px"></div>
+      <label>Contesto (dopo "al mondo ...")</label>
+      <input name="contesto" value="{{ row.contesto }}">
+      <div style="height:10px"></div>
+      <label>Gancio (chiude la frase)</label>
+      <textarea name="gancio" rows="3">{{ row.gancio }}</textarea>
+      <div style="height:12px"></div>
+      <button class="btn green" type="submit">Salva modifiche</button>
+    </form>
+  </div>
+  <div class="card">
+    {% if request.query_params.get('msg') %}
+      <div class="banner {% if 'Errore' in request.query_params.get('msg') or 'Quota' in request.query_params.get('msg') %}err{% endif %}" style="margin-bottom:12px">{{ request.query_params.get('msg') }}</div>
+    {% endif %}
+    <form method="post" action="/ai/regen/{{ i }}" style="display:inline">
+      <input type="hidden" name="back" value="/preview/{{ i }}">
+      <button class="btn" type="submit">Rigenera personalizzazione AI</button>
+    </form>
+    <a class="link-gold" href="/campaign/{{ cid }}" style="margin-left:14px">← Torna alla campagna</a>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ camp.name }} — Schoenbech Outreach</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
+    <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
+  </a>
+  <nav class="nav">
+    <a href="/">Campagne</a>
+    <a href="/logout">Esci</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  {% if request.query_params.get('msg') %}
+    <div class="banner">{{ request.query_params.get('msg') }}</div>
+  {% endif %}
+
+  <div class="card">
+    <div class="row spread">
+      <h3 style="margin:0">{{ camp.name }}</h3>
+      <form method="post" action="/campaign/{{ camp.campaign_id }}/delete"
+            onsubmit="return confirm('Eliminare la campagna e tutti i suoi contatti?');">
+        <button class="btn sm red" type="submit">Elimina campagna</button>
+      </form>
+    </div>
+    <form method="post" action="/import/{{ camp.campaign_id }}" enctype="multipart/form-data" class="row">
+      <div style="flex:1;min-width:220px">
+        <label>Carica file contatti (.xlsx / .csv)</label>
+        <input type="file" name="file" accept=".xlsx,.xls,.csv" required>
+      </div>
+      <div style="padding-top:18px"><button class="btn" type="submit">Importa</button></div>
+    </form>
+    <div class="hint" style="margin-top:8px">Colonne riconosciute: Azienda, Contatto (o Nome + Cognome), Email, Contesto, Gancio, Timing, Flag. Chi ha contesto+gancio+email diventa <b>Pronta</b>, gli altri <b>Bozza</b>.</div>
+    <div class="row" style="margin-top:14px;gap:10px">
+      <a class="btn green" href="/campaign/{{ camp.campaign_id }}/invio">Invio → ({{ n_ready }} pronti)</a>
+      <a class="btn" href="/campaign/{{ camp.campaign_id }}/recall">Recall → ({{ n_due }} da richiamare)</a>
+      <a class="btn" href="/testo">Testo email</a>
+      <form method="post" action="/campaign/{{ camp.campaign_id }}/fix-saluti"
+            onsubmit="return confirm('Correggere i saluti rimuovendo i ruoli?');">
+        <button class="btn gray" type="submit" title="Rimuove il ruolo dal saluto (es. Nome Cognome — Ruolo)">Sistema saluti</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Personalizzazione AI</h3>
+    <p class="hint">Genera <b>contesto</b> e <b>gancio</b> dai dati di ricerca (Attività, Competenze, Segnale, Alert) con Gemini.
+      Gli alert sensibili ricevono un gancio neutro. Provider: <b>{{ ai_state.provider }}</b> · Modello: <b>{{ ai_state.model }}</b>.</p>
+    <div class="row" style="margin-top:10px">
+      <form method="post" action="/campaign/{{ camp.campaign_id }}/genera-ai"
+            onsubmit="return confirm('Generare la personalizzazione AI per {{ n_ricerca }} aziende?');">
+        <button class="btn" type="submit" {% if n_ricerca == 0 or ai_state.running %}disabled{% endif %}>
+          Genera personalizzazione AI ({{ n_ricerca }})
+        </button>
+      </form>
+      <span class="muted" id="ai-info"></span>
+    </div>
+    {% if n_ricerca == 0 %}
+      <div class="hint" style="margin-top:8px">Nessun dato di ricerca: importa il file di ricerca (Claude/Lusha) con le colonne Attività, Competenze, Segnale, Alert.</div>
+    {% endif %}
+    <div id="aicard" style="{% if not ai_state.running and not ai_state.error %}display:none{% endif %};margin-top:10px">
+      <div class="bar"><div id="aifill"></div></div>
+      <div id="aicur" class="hint"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="filters">
+      <span class="tag Bozza">Bozze {{ counts.get('Bozza', 0) }}</span>
+      <span class="tag Pronta">Pronte {{ counts.get('Pronta', 0) }}</span>
+      <span class="tag Esclusa">Escluse {{ counts.get('Esclusa', 0) }}</span>
+      <span class="muted">totale {{ tot }}</span>
+    </div>
+    <input id="q" placeholder="Cerca azienda, contatto, email..." onkeyup="filtra()" style="margin-bottom:12px">
+    <table class="resp" id="t">
+      <thead><tr><th>#</th><th>Azienda</th><th>Saluto</th><th>Email</th><th>Timing</th><th>Flag</th><th>Gancio</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr>
+          <td data-label="#">{{ loop.index }}</td>
+          <td data-label="Azienda"><b>{{ r.azienda }}</b></td>
+          <td data-label="Saluto">{{ r.saluto }}</td>
+          <td data-label="Email">
+            {% if r.email %}{{ r.email }}
+            {% else %}
+              <form method="post" action="/set-email/{{ r.cc_id }}" style="display:flex;gap:6px;justify-content:flex-end">
+                <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}">
+                <input name="email" type="email" placeholder="+ email" required style="max-width:170px">
+                <button class="btn sm green" type="submit">Salva</button>
+              </form>
+            {% endif %}
+          </td>
+          <td data-label="Timing">{{ r.timing }}</td>
+          <td data-label="Flag"><span class="tag {{ r.flag }}">{{ r.flag }}</span></td>
+          <td data-label="Gancio" class="gancio">{{ r.gancio }}</td>
+          <td data-label="Stato"><span class="tag {{ r.stato }}">{{ r.stato }}</span></td>
+          <td data-label="Azioni" class="actions">
+            <a class="link-gold" href="/preview/{{ r.cc_id }}" target="_blank">Anteprima</a>
+            <form method="post" action="/ai/regen/{{ r.cc_id }}" style="display:inline">
+              <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}">
+              <button class="btn sm" type="submit" title="Rigenera la personalizzazione AI di questo contatto">AI</button>
+            </form>
+            <form method="post" action="/stato/{{ r.cc_id }}" style="display:inline-flex;gap:6px;flex-wrap:wrap">
+              <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}">
+              {% if r.stato != 'Pronta' %}<button class="btn sm green" name="stato" value="Pronta" type="submit">Approva</button>{% endif %}
+              {% if r.stato != 'Esclusa' %}<button class="btn sm gray" name="stato" value="Esclusa" type="submit">Escludi</button>{% endif %}
+              {% if r.stato != 'Bozza' %}<button class="btn sm" name="stato" value="Bozza" type="submit">Bozza</button>{% endif %}
+            </form>
+          </td>
+        </tr>
+      {% else %}
+        <tr><td colspan="9" class="muted">Nessun contatto. Carica un file qui sopra.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+function filtra(){
+  var q=document.getElementById('q').value.toLowerCase();
+  document.querySelectorAll('#t tbody tr').forEach(function(tr){
+    tr.style.display = tr.innerText.toLowerCase().indexOf(q) > -1 ? '' : 'none';
+  });
+}
+function aiPoll(){
+  fetch('/ai/status').then(r=>r.json()).then(s=>{
+    if(s.running || s.error){
+      document.getElementById('aicard').style.display='';
+      document.getElementById('aifill').style.width = (s.total ? Math.round(100*s.done/s.total) : 0) + '%';
+      var t = s.running ? ('Generazione... ' + s.done + '/' + s.total + ' · ' + (s.current||''))
+                        : (s.quota ? '⚠ ' + s.error : '⚠ ' + s.error);
+      document.getElementById('aicur').textContent = t;
+      document.getElementById('ai-info').textContent = s.model + ' · ' + s.thinking;
+      if(s.running){ setTimeout(aiPoll, 2500); }
+      else if(!s.error){ setTimeout(()=>location.reload(), 1200); }
+    }
+  }).catch(()=>{});
+}
+aiPoll();
+</script>
+</body>
+</html>

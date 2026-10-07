@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campagne — Schoenbech Outreach</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
+    <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
+  </a>
+  <nav class="nav">
+    <a href="/" class="on">Campagne</a>
+    <a href="/logout">Esci</a>
+  </nav>
+</header>
+
+<div class="wrap">
+  <div class="card">
+    <h3>Nuova campagna di invio massivo</h3>
+    <form method="post" action="/campaigns/new" class="row">
+      <input name="name" placeholder="Nome campagna (es. Varese-Gallarate-Legnano)" style="flex:1;min-width:240px">
+      <button class="btn" type="submit">Crea campagna</button>
+    </form>
+    <div class="hint" style="margin-top:8px">Crea la campagna, poi carica il file contatti (.xlsx / .csv) nella pagina della campagna.</div>
+  </div>
+
+  <div class="card">
+    <h3>Le tue campagne</h3>
+    <table class="resp">
+      <thead><tr><th>Azienda / Nome</th><th>Contatti</th><th>Creata</th><th></th></tr></thead>
+      <tbody>
+      {% for it in campaigns %}
+        <tr>
+          <td data-label="Campagna"><b>{{ it.c.name }}</b></td>
+          <td data-label="Contatti">{{ it.n }}</td>
+          <td data-label="Creata">{{ it.c.created_at.strftime('%d/%m/%Y %H:%M') if it.c.created_at else '' }}</td>
+          <td data-label="" class="actions"><a class="link-gold" href="/campaign/{{ it.c.campaign_id }}">Apri →</a></td>
+        </tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">Nessuna campagna. Creane una qui sopra.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+</body>
+</html>

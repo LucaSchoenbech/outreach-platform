@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Testo email — Schoenbech Outreach</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
+    <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
+  </a>
+  <nav class="nav"><a href="/">Campagne</a><a href="/logout">Esci</a></nav>
+</header>
+
+<div class="wrap" style="max-width:900px">
+  {% if request.query_params.get('msg') %}
+    <div class="banner">{{ request.query_params.get('msg') }}</div>
+  {% endif %}
+  <div class="card">
+    <h3 style="margin-top:0">Testo email generale</h3>
+    <p class="hint">Queste parti sono uguali in tutte le email. La parte personalizzata si modifica
+      dall'anteprima della singola email.<br>
+      Segnaposto: <b>{LINK}</b> = link presentazione (etichetta lunga) · <b>{LINK_BREVE}</b> = link breve
+      "la mia presentazione" ({{ link }}) · <b>**testo**</b> = grassetto nella versione HTML.</p>
+    <form method="post" action="/testo">
+      <label>Oggetto</label>
+      <input name="subject" value="{{ tpl.subject }}">
+      <div style="height:12px"></div>
+      <label>Corpo comune (dopo la parte personalizzata)</label>
+      <textarea name="corpo" rows="9">{{ tpl.corpo }}</textarea>
+      <div style="height:12px"></div>
+      <label>Testo recall (sollecito)</label>
+      <textarea name="recall_text" rows="7">{{ tpl.recall_text }}</textarea>
+      <div style="height:14px"></div>
+      <button class="btn green" type="submit">Salva testo</button>
+    </form>
+    <form method="post" action="/testo/reset" style="margin-top:10px"
+          onsubmit="return confirm('Ripristinare il testo originale di fabbrica?');">
+      <button class="btn gray" type="submit">Ripristina testo originale</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

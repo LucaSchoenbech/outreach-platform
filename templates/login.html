@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accesso — Schoenbech Outreach</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+<style>
+  .loginwrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+  .loginbox{width:100%;max-width:360px;background:#fff;border:1px solid var(--line);border-radius:16px;padding:32px;box-shadow:0 6px 24px rgba(26,35,50,.06)}
+  .loginbox img{display:block;height:52px;margin:0 auto 18px}
+  .loginbox h1{font-size:16px;text-align:center;margin:0 0 4px;color:var(--navy)}
+  .loginbox p{font-size:12px;text-align:center;color:var(--muted);margin:0 0 20px}
+</style>
+</head>
+<body>
+<div class="loginwrap">
+  <form class="loginbox" method="post" action="/login">
+    <img src="/static/logo_full.png" alt="Schoenbech">
+    <h1>Scouting &amp; Outreach</h1>
+    <p>Accesso riservato</p>
+    {% if request.query_params.get('e') %}<div class="banner err">Password errata.</div>{% endif %}
+    <label>Password</label>
+    <input type="password" name="password" required autofocus>
+    <div style="height:14px"></div>
+    <button class="btn" type="submit" style="width:100%">Accedi</button>
+  </form>
+</div>
+</body>
+</html>

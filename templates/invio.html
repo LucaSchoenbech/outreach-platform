@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ 'Recall' if mode == 'recall' else 'Invio' }} — {{ camp.name }}</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
+    <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
+  </a>
+  <nav class="nav">
+    <a href="/campaign/{{ camp.campaign_id }}">← Campagna</a>
+    <a href="/logout">Esci</a>
+  </nav>
+</header>
+
+<div class="wrap" style="max-width:1100px">
+  {% if request.query_params.get('msg') %}
+    <div class="banner {% if 'Errore' in request.query_params.get('msg') %}err{% endif %}">{{ request.query_params.get('msg') }}</div>
+  {% endif %}
+
+  <div class="card">
+    <div class="row spread">
+      <div><span class="stat">{{ tot }}</span> <span class="muted">contatti da {{ 'richiamare' if mode == 'recall' else 'inviare' }}</span></div>
+      <div class="muted">{{ camp.name }}</div>
+    </div>
+    <p class="hint" style="margin:10px 0 0">
+      {% if mode == 'recall' %}Recall: contatti inviati da più di 7 giorni, senza risposta.
+      {% else %}Vengono inviate solo le bozze <b>Pronta</b>, con email valida e non in suppression.{% endif %}
+      Ritmo umano 65–115s, pausa ogni 10. Per {{ tot }} contatti: <b>~{{ ((tot * 1.5) | round(0, 'ceil') | int) }} minuti</b>.
+    </p>
+  </div>
+
+  <div class="card">
+    <div class="warn">Fai prima il <b>TEST</b> (arriva a te). Poi avvia l'invio reale.</div>
+    <div class="row">
+      <form method="post" action="/invio/test" class="row" style="gap:8px">
+        <input type="hidden" name="cid" value="{{ camp.campaign_id }}">
+        <input type="hidden" name="mode" value="{{ mode }}">
+        <select name="channel" style="width:auto"><option>Gmail</option><option>Aruba</option></select>
+        <button class="btn gray" type="submit">Invia TEST a me</button>
+      </form>
+      <form method="post" action="/invio/start" class="row" style="gap:8px"
+            onsubmit="return confirm('Avviare l\'invio a {{ tot }} contatti?');">
+        <input type="hidden" name="cid" value="{{ camp.campaign_id }}">
+        <input type="hidden" name="mode" value="{{ mode }}">
+        <select name="channel" style="width:auto"><option>Gmail</option><option>Aruba</option></select>
+        <label style="margin:0;text-transform:none;font-size:12px;display:flex;align-items:center;gap:6px;font-weight:600">
+          <input type="checkbox" name="salva_copia" value="on" checked> Copia in Posta inviata
+        </label>
+        <button class="btn green" type="submit" {% if tot == 0 or state.running %}disabled{% endif %}>
+          AVVIA {{ 'RECALL' if mode == 'recall' else 'INVIO' }} ({{ tot }})
+        </button>
+      </form>
+      <form method="post" action="/invio/stop">
+        <input type="hidden" name="cid" value="{{ camp.campaign_id }}">
+        <input type="hidden" name="mode" value="{{ mode }}">
+        <button class="btn red" type="submit" {% if not state.running %}disabled{% endif %}>Ferma</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="card" id="progcard" style="{% if not state.running and not state.finished %}display:none{% endif %}">
+    <div class="row spread">
+      <div><b id="ptitle">Invio</b> <span id="pchan" style="color:var(--gold)"></span></div>
+      <div><b id="pcount">0/0</b></div>
+    </div>
+    <div class="bar"><div id="pfill"></div></div>
+    <div id="pcur" class="hint"></div>
+    <div id="pcopia" class="hint" style="color:var(--ok)"></div>
+    <pre class="log" id="plog"></pre>
+  </div>
+
+  <div class="card">
+    <h3>Contatti in coda</h3>
+    <table class="resp">
+      <thead><tr><th>#</th><th>Saluto</th><th>Azienda</th><th>Email</th></tr></thead>
+      <tbody>
+      {% for r in rows %}
+        <tr><td data-label="#">{{ loop.index }}</td><td data-label="Saluto">{{ r.saluto }}</td><td data-label="Azienda">{{ r.azienda }}</td><td data-label="Email">{{ r.email }}</td></tr>
+      {% else %}
+        <tr><td colspan="4" class="muted">Nessun contatto in coda.</td></tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+<script>
+function poll(){
+  fetch('/invio/status').then(r=>r.json()).then(s=>{
+    if(s.running || s.finished){
+      document.getElementById('progcard').style.display='';
+      document.getElementById('ptitle').textContent = s.running ? 'Invio in corso...' : (s.error ? 'Interrotto' : 'Terminato');
+      document.getElementById('pchan').textContent = s.channel + (s.message_no===2?' · recall':'');
+      document.getElementById('pcount').textContent = s.done + '/' + s.total;
+      document.getElementById('pfill').style.width = (s.total ? Math.round(100*s.done/s.total) : 0) + '%';
+      document.getElementById('pcur').textContent = s.error ? ('⚠ ' + s.error) : s.current;
+      var cp=''; if(s.copia) cp='Copie in Posta inviata: ' + s.copia;
+      if(s.copia_err) cp += (cp?' — ':'') + '⚠ copia: ' + s.copia_err;
+      document.getElementById('pcopia').textContent = cp;
+      document.getElementById('plog').textContent = (s.log||[]).slice(-40).join('\n');
+    }
+    if(s.running){ setTimeout(poll, 2000); }
+  }).catch(()=>setTimeout(poll, 4000));
+}
+poll();
+</script>
+</body>
+</html>
