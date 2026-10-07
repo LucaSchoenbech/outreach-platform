@@ -42,9 +42,9 @@ valutazione di profili manageriali e specialistici senior. Ricevi i DATI DI RICE
 un'azienda target e devi produrre la personalizzazione di una email di outreach in italiano.
 
 La frase che stai completando è:
-"mi permetto di scriverLe per presentarmi: sono un Talent Advisor indipendente, specializzato
-nella ricerca e valutazione di profili manageriali e specialistici senior, con particolare
-attenzione al mondo <CONTESTO>, <GANCIO>."
+"mi permetto di presentarmi: sono Luca Roberto Schoenbech, Talent Search Advisor. Mi occupo
+di ricerca e valutazione di manager e specialisti senior, con particolare attenzione al
+mondo <CONTESTO>, <GANCIO>."
 Il gancio deve PROSEGUIRE la frase in modo naturale, attaccato con una virgola.
 
 OBIETTIVO: il destinatario deve percepire che conosci il suo contesto industriale concreto

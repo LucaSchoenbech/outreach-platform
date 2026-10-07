@@ -16,7 +16,7 @@ from email.utils import formataddr, formatdate
 
 from app import config
 from app.db import SessionLocal
-from app.email_builder import LOGO, build_email, build_email_html, get_email_template
+from app.email_builder import LOGO, build_email, build_email_html, get_email_template, link_mancanti
 
 STATE = {"running": False, "finished": False, "channel": "Gmail", "message_no": 1,
          "total": 0, "done": 0, "current": "", "log": [], "error": "", "copia": 0,
@@ -126,6 +126,13 @@ def _persist(row, message_no, channel, subject, ok, err=""):
 
 
 def run_send(rows, channel, salva_copia=True, message_no=1):
+    mancanti = link_mancanti(get_email_template())
+    if mancanti:
+        with LOCK:
+            STATE.update(running=False, finished=True, total=len(rows), done=0,
+                         current="Invio bloccato",
+                         error=f"Link non configurato: {', '.join(mancanti)}. Nessuna email inviata.")
+        return
     ch = channel_config(channel)
     with LOCK:
         STATE.update(running=True, finished=False, channel=channel, message_no=message_no,
@@ -216,6 +223,9 @@ def run_send(rows, channel, salva_copia=True, message_no=1):
 def do_test(rows, channel, message_no=1):
     if not rows:
         return "Nessun contatto pronto."
+    mancanti = link_mancanti(get_email_template())
+    if mancanti:
+        return f"Invio bloccato: link non configurato ({', '.join(mancanti)})."
     ch = channel_config(channel)
     try:
         smtp = smtplib.SMTP_SSL(ch["server"], ch["port"], timeout=30)
