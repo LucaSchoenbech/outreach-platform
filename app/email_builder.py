@@ -15,10 +15,10 @@ LINK = "https://schoenbech.com/attivita-consulenza-overview.pdf"
 
 # Esempio reale di mappatura (ricerca Responsabile Pricing, dati anonimizzati).
 # Finché è vuoto, mailer.run_send/do_test bloccano l'invio delle email che lo citano.
-# Link aperto (riutilizzabile, sola lettura) al progetto /progetti/5 di Talent Mapping.
+# Link aperto (riutilizzabile, sola lettura) al progetto /progetti/6 di Talent Mapping.
 LINK_MAPPATURA = os.getenv(
     "LINK_MAPPATURA",
-    "https://businessintelligence.schoenbech.com/accesso/mYoiymvCODBI9Twh9HXPvGNIfircfrS0",
+    "https://businessintelligence.schoenbech.com/accesso/1u3i1QKs5T7ivJph_uAHbqBMIkuoCa-m",
 ).strip()
 
 _STATIC_LOGO = Path(__file__).resolve().parent.parent / "static" / "logo_email.png"
