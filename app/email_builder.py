@@ -27,19 +27,20 @@ LOGO = _STATIC_LOGO if _STATIC_LOGO.exists() else _WIN_LOGO
 
 SUBJECT = "Recruitment As a Service : Schoenbech | Talent Advisory"
 
-APERTURA_BASE = ("mi permetto di presentarmi: sono Luca Roberto Schoenbech, Talent Search Advisor. "
-                 "Mi occupo di ricerca e valutazione di manager e specialisti senior, "
-                 "con particolare attenzione al mondo ")
+APERTURA_BASE = ("sono Luca Roberto Schoenbech, consulente indipendente e Talent Search Advisor. "
+                 "Mi occupo di ricerca e valutazione di manager e specialisti senior")
 
-CORPO = """Ogni incarico, oltre alla rosa dei candidati, produce una mappatura analitica del mercato, costruita sui colloqui diretti con i professionisti: chi ricopre oggi ruoli comparabili e in quali aziende, come quelle aziende organizzano il ruolo, quali sono i livelli retributivi di mercato e le aspettative, quanti sono disponibili a valutare un cambiamento e per quali motivi gli altri non lo sono. L'azienda la consulta in un'area riservata, aggiornata durante tutta la ricerca, e la usa per decidere sui dati: non solo quale candidato scegliere, ma anche se l'offerta è competitiva o se il profilo va ricalibrato.
+CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro: ogni ricerca comprende una mappatura del mercato costruita attraverso i colloqui diretti con i professionisti contattati.
 
-Può vedere qui un esempio reale, relativo alla ricerca di un Responsabile Pricing, con i dati resi anonimi a tutela delle persone coinvolte e del cliente: {LINK_MAPPATURA}. Il link si apre direttamente, senza registrazione.
+Oltre ai candidati, l’azienda dispone così di informazioni concrete su come altre realtà organizzano ruoli analoghi, sui livelli retributivi e sulle condizioni che favoriscono o frenano un cambiamento. La mappatura è consultabile in un’area riservata e viene aggiornata durante la ricerca: aiuta a valutare la competitività dell’offerta e a capire se occorre rivedere alcuni requisiti del profilo.
 
-Seguo personalmente ogni fase, **con un modello snello che consente tempi rapidi e costi più contenuti** rispetto all'Executive e Professional Search tradizionale, **senza ridurre la profondità del lavoro**.
+Qui può consultare {LINK_MAPPATURA|un esempio reale di mappatura}, relativo alla ricerca di un Responsabile Pricing, con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione.
 
-Se nei prossimi mesi dovesse cercare un responsabile di funzione o uno specialista senior, sarei lieto di commentare con Lei l'esempio in una breve chiamata e capire se posso esserLe utile.
+Seguo personalmente ogni fase dell’incarico, con una struttura snella che permette di contenere i costi e mantenere un rapporto diretto durante tutto il lavoro.
 
-A questo link può trovare una breve presentazione della mia attività, mentre in calce trova i riferimenti al sito web per ulteriori dettagli: {LINK}"""
+Se avete in programma l’inserimento di un responsabile di funzione o di uno specialista senior, sarei lieto di confrontarmi con Lei in una breve chiamata, partendo dalle vostre esigenze.
+
+Per un quadro più generale, trova qui {LINK|una breve presentazione della mia attività}."""
 
 CLOSING = "Un cordiale saluto,"
 
@@ -127,17 +128,44 @@ def build_saluto(contatto, titolo=""):
     return f"Gentile {titolo} {cognome}".strip()
 
 
-APERTURA_SENZA_CONTESTO = ("mi permetto di presentarmi: sono Luca Roberto Schoenbech, Talent Search "
-                           "Advisor. Mi occupo di ricerca e valutazione di manager e specialisti senior")
+# Connettori del vecchio "gancio" (frase lunga): non sono profili, non vanno in apertura.
+_GANCIO_LEGACY = ("dove ", "in cui ", "ambiti ", "settori ", "contesti ", "una fase ", "nei quali ")
 
 
-def build_apertura(contesto, gancio):
-    c = str(contesto).strip()
-    g = str(gancio).strip()
-    base = (APERTURA_BASE + c) if c else APERTURA_SENZA_CONTESTO
-    if g:
-        return base + ", " + g.rstrip(".") + "."
-    return base + "."
+def _profili(gancio):
+    g = str(gancio).strip().rstrip(".")
+    if not g or g.lower().startswith(_GANCIO_LEGACY) or len(g.split()) > 14:
+        return ""
+    if g.lower().startswith("profili "):
+        g = g[len("profili "):]
+    return g
+
+
+def _settore(contesto):
+    c = str(contesto).strip().rstrip(".")
+    for pref in ("nel settore ", "al mondo ", "settore "):
+        if c.lower().startswith(pref):
+            c = c[len(pref):]
+    return c
+
+
+def apertura_parti(contesto, gancio):
+    """(profili, settore) puliti per la frase d'apertura."""
+    return _profili(gancio), _settore(contesto)
+
+
+def build_apertura(contesto, gancio, esc=lambda x: x):
+    """'…senior, con particolare attenzione ai profili <profili> nel settore <settore>.'"""
+    profili, settore = apertura_parti(contesto, gancio)
+    if profili and settore:
+        coda = f", con particolare attenzione ai profili {esc(profili)} nel settore {esc(settore)}."
+    elif profili:
+        coda = f", con particolare attenzione ai profili {esc(profili)}."
+    elif settore:
+        coda = f", con particolare attenzione al settore {esc(settore)}."
+    else:
+        coda = "."
+    return APERTURA_BASE + coda
 
 
 def _plain(testo):
@@ -167,16 +195,28 @@ def get_email_template():
     return tpl
 
 
+# Segnaposto link: {LINK}, {LINK_BREVE}, {LINK_MAPPATURA}, oppure con il testo
+# cliccabile scelto: {LINK|etichetta}, {LINK_MAPPATURA|etichetta}.
+_LINK_RE = re.compile(r"[{](LINK_MAPPATURA|LINK_BREVE|LINK)(?:[|]([^{}]+))?[}]")
+
+
+def _url(nome):
+    return LINK_MAPPATURA if nome == "LINK_MAPPATURA" else LINK
+
+
 def link_mancanti(tpl=None):
     """Segnaposto usati nel testo ma senza URL configurato (invio da bloccare)."""
     t = tpl or {}
     testi = " ".join([t.get("corpo") or CORPO, t.get("recall_text") or RECALL_TEXT])
-    return ["LINK_MAPPATURA"] if "{LINK_MAPPATURA}" in testi and not LINK_MAPPATURA else []
+    usa_mappatura = any(m.group(1) == "LINK_MAPPATURA" for m in _LINK_RE.finditer(testi))
+    return ["LINK_MAPPATURA"] if usa_mappatura and not LINK_MAPPATURA else []
 
 
 def _sostituisci_link_plain(testo):
-    return (testo.replace("{LINK_MAPPATURA}", LINK_MAPPATURA or "[link esempio di mappatura]")
-            .replace("{LINK_BREVE}", LINK).replace("{LINK}", LINK))
+    def sub(m):
+        url = _url(m.group(1)) or "[link esempio di mappatura]"
+        return f"{m.group(2).strip()} ({url})" if m.group(2) else url
+    return _LINK_RE.sub(sub, testo)
 
 
 def build_email(row, message_no=1, tpl=None):
@@ -187,10 +227,7 @@ def build_email(row, message_no=1, tpl=None):
     saluto = row.get("saluto", "")
     # Apertura ricalcolata da contesto/gancio: testo semplice identico all'HTML
     # (paragrafo_apertura salvato all'import resta solo come fallback).
-    if row.get("contesto") or row.get("gancio"):
-        apertura = build_apertura(row.get("contesto", ""), row.get("gancio", ""))
-    else:
-        apertura = row.get("paragrafo_apertura", "") or build_apertura("", "")
+    apertura = build_apertura(row.get("contesto", ""), row.get("gancio", ""))
     buongiorno = saluto_orario()
     ricordato = row.get("saluto_originale") or buongiorno
     corpo_orig = f"{apertura}\n\n{corpo}\n\n{CLOSING}\n{FIRMA_NOME}\n\n{PRIVACY}"
@@ -245,11 +282,7 @@ I suoi dati di contatto professionali provengono da banche dati B2B e da fonti p
 
 
 def _intro_html(contesto, gancio):
-    c = str(contesto).strip()
-    g = str(gancio).strip()
-    base = (APERTURA_BASE + html.escape(c)) if c else APERTURA_SENZA_CONTESTO
-    coda = (", " + html.escape(g.rstrip(".")) + ".") if g else "."
-    return base + coda
+    return build_apertura(contesto, gancio, esc=html.escape)
 
 
 LINK_ANCHOR = (f'<a href="{LINK}" style="color:#b08d57;font-weight:bold;text-decoration:none;">'
@@ -259,11 +292,24 @@ LINK_ANCHOR_BREVE = (f'<a href="{LINK}" style="color:#b08d57;font-weight:bold;te
                      "la mia presentazione</a>")
 
 
-def _link_mappatura_html():
+def _link_mappatura_html(etichetta="Presentazione Attivit&agrave; di Mappatura"):
     if not LINK_MAPPATURA:
-        return "[Presentazione Attivit&agrave; di Mappatura]"
+        return f"[{etichetta}]"
     return (f'<a href="{html.escape(LINK_MAPPATURA, quote=True)}" '
-            'style="color:#b08d57;font-weight:bold;text-decoration:none;">Presentazione Attivit&agrave; di Mappatura</a>')
+            f'style="color:#b08d57;font-weight:bold;text-decoration:none;">{etichetta}</a>')
+
+
+def _sostituisci_link_html(testo):
+    """Segnaposto -> link dorati (l'etichetta è già escapata insieme al paragrafo)."""
+    def sub(m):
+        nome, etichetta = m.group(1), m.group(2)
+        if nome == "LINK_MAPPATURA":
+            return _link_mappatura_html(etichetta.strip()) if etichetta else _link_mappatura_html()
+        if etichetta:
+            return (f'<a href="{LINK}" style="color:#b08d57;font-weight:bold;text-decoration:none;">'
+                    f"{etichetta.strip()}</a>")
+        return LINK_ANCHOR_BREVE if nome == "LINK_BREVE" else LINK_ANCHOR
+    return _LINK_RE.sub(sub, testo)
 
 
 def _corpo_html(corpo):
@@ -273,8 +319,7 @@ def _corpo_html(corpo):
     for p in paragrafi:
         p = html.escape(p)
         p = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", p, flags=re.S)
-        p = (p.replace("\n", " ").replace("{LINK_MAPPATURA}", _link_mappatura_html())
-             .replace("{LINK_BREVE}", LINK_ANCHOR_BREVE).replace("{LINK}", link_html))
+        p = _sostituisci_link_html(p.replace(chr(10), " "))
         out.append(f'<p style="margin:0 0 22px 0;">{p}</p>')
     return "".join(out)
 
@@ -287,9 +332,8 @@ def build_email_html(row, logo="/logo.png", message_no=1, tpl=None):
     if message_no == 2:
         ricordato = row.get("saluto_originale") or saluto_orario()
         recall = (_plain(t.get("recall_text") or RECALL_TEXT)
-                  .replace("{LINK_MAPPATURA}", _link_mappatura_html())
-                  .replace("{LINK_BREVE}", LINK_ANCHOR_BREVE)
-                  .replace("{LINK}", LINK_ANCHOR).replace("\n", "<br>"))
+                  .replace(chr(10), "<br>"))
+        recall = _sostituisci_link_html(recall)
         html = (HTML_TOP
                 + f'<p style="margin:0 0 20px 0;">{recall}</p></div>'
                 + HTML_FIRMA

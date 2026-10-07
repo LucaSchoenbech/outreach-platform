@@ -39,7 +39,7 @@
       </div>
       <div style="padding-top:18px"><button class="btn" type="submit">Importa</button></div>
     </form>
-    <div class="hint" style="margin-top:8px">Colonne riconosciute: Azienda, Contatto (o Nome + Cognome), Email, Contesto, Gancio, Timing, Flag. Chi ha contesto+gancio+email diventa <b>Pronta</b>, gli altri <b>Bozza</b>.</div>
+    <div class="hint" style="margin-top:8px">Colonne riconosciute: Azienda, Contatto (o Nome + Cognome), Email, Contesto (= settore), Gancio (= profili), Timing, Flag. Chi ha settore+profili+email diventa <b>Pronta</b>, gli altri <b>Bozza</b>.</div>
     <div class="row" style="margin-top:14px;gap:10px">
       <a class="btn green" href="/campaign/{{ camp.campaign_id }}/invio">Invio → ({{ n_ready }} pronti)</a>
       <a class="btn" href="/campaign/{{ camp.campaign_id }}/recall">Recall → ({{ n_due }} da richiamare)</a>
@@ -53,7 +53,7 @@
 
   <div class="card">
     <h3>Personalizzazione AI</h3>
-    <p class="hint">Genera <b>contesto</b> e <b>gancio</b> dai dati di ricerca (Attività, Competenze, Segnale, Alert) con Gemini.
+    <p class="hint">Genera <b>settore</b> e <b>profili</b> dell'apertura dai dati di ricerca (Attività, Competenze, Segnale, Alert) con Gemini.
       Gli alert sensibili ricevono un gancio neutro. Provider: <b>{{ ai_state.provider }}</b> · Modello: <b>{{ ai_state.model }}</b>.</p>
     <div class="row" style="margin-top:10px">
       <form method="post" action="/campaign/{{ camp.campaign_id }}/genera-ai"
@@ -82,7 +82,7 @@
     </div>
     <input id="q" placeholder="Cerca azienda, contatto, email..." onkeyup="filtra()" style="margin-bottom:12px">
     <table class="resp" id="t">
-      <thead><tr><th>#</th><th>Azienda</th><th>Saluto</th><th>Email</th><th>Timing</th><th>Flag</th><th>Gancio</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <thead><tr><th>#</th><th>Azienda</th><th>Saluto</th><th>Email</th><th>Timing</th><th>Flag</th><th>Profili</th><th>Stato</th><th>Azioni</th></tr></thead>
       <tbody>
       {% for r in rows %}
         <tr>
@@ -101,7 +101,7 @@
           </td>
           <td data-label="Timing">{{ r.timing }}</td>
           <td data-label="Flag"><span class="tag {{ r.flag }}">{{ r.flag }}</span></td>
-          <td data-label="Gancio" class="gancio">{{ r.gancio }}</td>
+          <td data-label="Profili" class="gancio">{{ r.gancio }}</td>
           <td data-label="Stato"><span class="tag {{ r.stato }}">{{ r.stato }}</span></td>
           <td data-label="Azioni" class="actions">
             <a class="link-gold" href="/preview/{{ r.cc_id }}" target="_blank">Anteprima</a>

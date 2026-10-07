@@ -6,7 +6,6 @@ Provider principale: DeepSeek (API OpenAI-compatibile), modello configurabile
 Rileva l'esaurimento di quota/credito e lo segnala.
 """
 import json
-import random
 import threading
 
 import requests
@@ -20,15 +19,6 @@ AI_LOCK = threading.Lock()
 AI_STOP = threading.Event()
 
 
-# Formule di chiusura usate a rotazione (scarsità attribuita al mercato).
-FORMULE = [
-    "risultano tra i più complessi da intercettare sul mercato",
-    "sono particolarmente contesi",
-    "presentano una disponibilità limitata sul mercato",
-    "richiedono una ricerca particolarmente mirata",
-]
-
-
 class QuotaExhausted(Exception):
     """Quota/credito API esaurito."""
 
@@ -37,81 +27,50 @@ class AIError(Exception):
     pass
 
 
-PROMPT = """Sei un Talent Advisor indipendente italiano, specializzato nella ricerca e
-valutazione di profili manageriali e specialistici senior. Ricevi i DATI DI RICERCA su
-un'azienda target e devi produrre la personalizzazione di una email di outreach in italiano.
+PROMPT = """Sei Luca Roberto Schoenbech, consulente indipendente e Talent Search Advisor
+italiano: ricerca e valutazione di manager e specialisti senior. Ricevi i DATI DI RICERCA
+su un'azienda target e devi personalizzare l'apertura di una email di presentazione.
 
-La frase che stai completando è:
-"mi permetto di presentarmi: sono Luca Roberto Schoenbech, Talent Search Advisor. Mi occupo
-di ricerca e valutazione di manager e specialisti senior, con particolare attenzione al
-mondo <CONTESTO>, <GANCIO>."
-Il gancio deve PROSEGUIRE la frase in modo naturale, attaccato con una virgola.
+FORMULA FISSA (non modificarla, completa solo i due segnaposto):
+"sono Luca Roberto Schoenbech, consulente indipendente e Talent Search Advisor. Mi occupo
+di ricerca e valutazione di manager e specialisti senior, con particolare attenzione ai
+profili <PROFILI> nel settore <SETTORE>."
 
-OBIETTIVO: il destinatario deve percepire che conosci il suo contesto industriale concreto
-(business, prodotti e servizi, presenza e attività in Italia, mercati serviti, tecnologie
-e competenze distintive, temi di innovazione, qualità, sostenibilità, automazione, export,
-produzione, engineering, regulatory) e che segui personalmente gli incarichi.
-La difficoltà di reperimento va attribuita al MERCATO e alla disponibilità dei profili,
-MAI al consulente.
+Esempio corretto:
+"...con particolare attenzione ai profili tecnici, agronomici e di sviluppo prodotto nel
+settore della nutrizione biologica e dei biostimolanti per l'agricoltura."
+  -> "gancio": "tecnici, agronomici e di sviluppo prodotto"
+  -> "contesto": "della nutrizione biologica e dei biostimolanti per l'agricoltura"
 
 Rispondi SOLO con un oggetto JSON con questi campi:
-- "contesto": completa "al mondo ...". Inizia con "del ", "della ", "dei ", "delle ",
-  "degli " o "dell'"; sintetico, basato sull'attività concreta dell'azienda.
-  Massimo 10 parole.
-- "gancio": UNA frase (massimo 28 parole) che PROSEGUE la frase precedente con questa
-  struttura: "<connettore> <tipologia di profili> con <competenze rilevanti> <chiusura>".
-  Connettori ammessi: "dove", "ambiti nei quali", "in cui", "settori in cui",
-  "contesti in cui", "una fase in cui". Poi il soggetto (i profili / le competenze).
-- "tipo_gancio": uno tra "Scarsità", "Visibilità", "Fase", "Neutro".
+- "contesto" = <SETTORE>: completa "nel settore ...". Inizia con "del ", "della ",
+  "dei ", "delle ", "degli " o "dell'". Descrive il settore e l'attività CONCRETA
+  dell'azienda (prodotti, tecnologie, mercato servito), non una categoria generica.
+  Massimo 12 parole. Niente punto finale.
+- "gancio" = <PROFILI>: completa "ai profili ...". Elenco di 2-3 famiglie di profili
+  davvero rilevanti per quell'azienda (es. "tecnici, agronomici e di sviluppo prodotto",
+  "di produzione, qualità e sviluppo materiali", "commerciali e di application
+  engineering"). Massimo 8 parole. Solo aggettivi/specificazioni: NON ripetere la parola
+  "profili", niente verbi, niente frasi relative ("dove", "in cui"), niente giudizi di
+  scarsità o di mercato, niente punto finale.
+- "tipo_gancio": "Neutro" se i profili sono generici, altrimenti "Visibilità".
 - "flag": uno tra "OK", "Correzione", "Verifica", "Sensibile".
 
-PERSONALIZZAZIONE:
-- Non limitarti a sostituire il nome del settore: individua 1-2 elementi REALMENTE
-  caratterizzanti dai dati e collegali a una plausibile esigenza di talent acquisition,
-  citando la tipologia di profili e le competenze rilevanti.
-- Esempi:
-  "...al mondo delle tecnologie e degli impianti per il packaging, dove profili tecnici
-  e commerciali con solide competenze applicative e una buona comprensione delle esigenze
-  dei clienti industriali richiedono una ricerca particolarmente mirata."
-  "...in contesti farmaceutici ad elevata specializzazione, dove profili tecnici, quality
-  e regulatory con esperienza specifica di processo sono particolarmente contesi."
-  "...in contesti industriali internazionali, dove profili tecnici e manageriali capaci
-  di combinare competenza specialistica, esperienza operativa e capacità di lavorare su
-  mercati diversi risultano difficili da intercettare."
-- Se le informazioni sono limitate, usa una personalizzazione prudente e credibile,
-  senza forzare.
-
 REGOLE TASSATIVE:
-- Prima persona singolare e soggetto "il mercato". VIETATI: "lavoriamo", "nella nostra
-  esperienza", "il nostro team", "i nostri consulenti", "dal nostro osservatorio",
-  e MAI "voi dovreste".
-- La scarsità è del MERCATO, mai del consulente. VIETATI: "ho difficoltà a trovare",
-  "faccio fatica a reperire", "ho riscontrato difficoltà". Preferisci: "risultano tra i
-  più complessi da intercettare sul mercato", "sono particolarmente contesi",
-  "presentano una disponibilità limitata sul mercato", "richiedono una ricerca
-  particolarmente mirata".
-- Se nei DATI è presente il campo "formula", usala come chiusura del gancio
-  (adattandola con naturalezza alla frase).
-- NON inventare: clienti, incarichi svolti, case history, conoscenza diretta
-  dell'azienda, esperienze pregresse con quella società, dati non verificati.
-  VIETATI: "conosciamo bene la vostra realtà", "abbiamo seguito aziende simili",
-  "la nostra esperienza nel vostro settore".
-- VIETATO ripetere parole già presenti nel "contesto" (settore, prodotti, mercato):
-  il gancio deve AGGIUNGERE, non rispiegare.
-- VIETATO l'assoluto/saccente: "è necessario", "bisogna", "le aziende devono", "serve",
-  "occorre"; e le formule deboli o incerte: "ci risulta", "ci sembra", "forse",
-  "probabilmente".
-- Non spiegare all'azienda il suo business: aggiungi solo un'osservazione di mercato.
-- Niente numeri, fatturati, acquisizioni, investimenti, nomi di clienti.
-- Tono professionale, senior, asciutto e naturale: non deve sembrare una mail generata
-  automaticamente, commerciale aggressiva, autoreferenziale, da grande società di
-  executive search o da freelance low cost.
-- Una sola frase, semplice e lineare: evita costruzioni contorte o ridondanti.
+- La formula fissa non si cambia: produci SOLO i due segnaposto.
+- Coerenza: i profili devono essere quelli che un'azienda di quel settore cerca
+  davvero (tecnici, produzione, qualità, R&D, regulatory, commerciali, operations...).
+- Il settore non deve ripetere parole dei profili e viceversa.
+- NON inventare: clienti, incarichi svolti, conoscenza diretta dell'azienda, dati non
+  verificati. Niente numeri, fatturati, acquisizioni, nomi di clienti.
+- Italiano naturale e sobrio, tono professionale senior: niente toni commerciali,
+  superlativi o formule generate automaticamente.
 
 GUARDRAIL:
 - Situazione delicata (ammortizzatori sociali, crisi, discontinuità, fermo produzione,
-  ricapitalizzazione) -> "tipo_gancio": "Neutro", gancio neutro, "flag": "Sensibile".
-- Timing "BASSO" o con "MONITORARE" -> gancio neutro.
+  ricapitalizzazione) -> profili generici ("tecnici e manageriali"), "tipo_gancio":
+  "Neutro", "flag": "Sensibile".
+- Timing "BASSO" o con "MONITORARE" -> profili generici, "tipo_gancio": "Neutro".
 - Timing con "VERIFICARE" -> "flag": "Verifica".
 - Alert che corregge il settore (errato/troppo stretto/incompleto) -> "flag": "Correzione".
 - Se non c'è materiale sufficiente -> "gancio": "" e "tipo_gancio": "Neutro".
@@ -238,7 +197,6 @@ def generate_one(cc_id):
                 "timing": cc.timing or ""}
         if not any([data["attivita"], data["competenze"], data["segnale"], data["alert"]]):
             return "Nessun dato di ricerca per questo contatto"
-        data["formula"] = random.choice(FORMULE)
         out = generate_personalization(data)
         cc.contesto = (out.get("contesto") or "").strip()
         cc.gancio = (out.get("gancio") or "").strip()
@@ -274,7 +232,6 @@ def run_generate(rows):
             with AI_LOCK:
                 AI_STATE["current"] = row.get("azienda", "")
             data = dict(row["data"])
-            data["formula"] = FORMULE[idx % len(FORMULE)]
             try:
                 out = generate_personalization(data)
             except QuotaExhausted as e:
