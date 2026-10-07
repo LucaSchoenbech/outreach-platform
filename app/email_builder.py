@@ -30,13 +30,13 @@ SUBJECT = "Recruitment As a Service : Schoenbech | Talent Advisory"
 APERTURA_BASE = ("sono Luca Roberto Schoenbech, consulente indipendente e Talent Search Advisor. "
                  "Mi occupo di ricerca e valutazione di manager e specialisti senior")
 
-CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro: ogni ricerca comprende una mappatura del mercato costruita attraverso i colloqui diretti con i professionisti contattati.
+CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro: ogni ricerca comprende **una mappatura del mercato** costruita attraverso i colloqui diretti con i professionisti contattati.
 
-Oltre ai candidati, l’azienda dispone così di informazioni concrete su come altre realtà organizzano ruoli analoghi, sui livelli retributivi e sulle condizioni che favoriscono o frenano un cambiamento. La mappatura è consultabile in un’area riservata e viene aggiornata durante la ricerca: aiuta a valutare la competitività dell’offerta e a capire se occorre rivedere alcuni requisiti del profilo.
+Oltre ai candidati, l’azienda dispone così di **informazioni concrete** su come altre realtà organizzano ruoli analoghi, **sui livelli retributivi** e sulle condizioni che favoriscono o frenano un cambiamento. La mappatura è consultabile in un’area riservata e viene aggiornata durante la ricerca: aiuta a valutare la competitività dell’offerta e a capire se occorre rivedere alcuni requisiti del profilo.
 
-Qui può consultare {LINK_MAPPATURA|un esempio reale di mappatura}, relativo alla ricerca di un Responsabile Pricing, con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione.
+Qui può consultare {LINK_MAPPATURA|un esempio reale di mappatura}, relativo alla ricerca di un **Responsabile Pricing**, con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione.
 
-Seguo personalmente ogni fase dell’incarico, con una struttura snella che permette di contenere i costi e mantenere un rapporto diretto durante tutto il lavoro.
+Seguo personalmente ogni fase dell’incarico, con **una struttura snella che permette di contenere i costi** e mantenere un rapporto diretto durante tutto il lavoro.
 
 Se avete in programma l’inserimento di un responsabile di funzione o di uno specialista senior, sarei lieto di confrontarmi con Lei in una breve chiamata, partendo dalle vostre esigenze.
 
@@ -282,7 +282,8 @@ I suoi dati di contatto professionali provengono da banche dati B2B e da fonti p
 
 
 def _intro_html(contesto, gancio):
-    return build_apertura(contesto, gancio, esc=html.escape)
+    return build_apertura(contesto, gancio,
+                          esc=lambda x: f"<strong>{html.escape(x)}</strong>")
 
 
 LINK_ANCHOR = (f'<a href="{LINK}" style="color:#b08d57;font-weight:bold;text-decoration:none;">'
