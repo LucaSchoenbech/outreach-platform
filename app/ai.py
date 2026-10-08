@@ -27,12 +27,12 @@ class AIError(Exception):
     pass
 
 
-PROMPT = """Sei Luca Roberto Schoenbech, consulente indipendente e Talent Search Advisor
+PROMPT = """Sei Luca Roberto Schoenbech, Temporary Recruiter e Talent Search Advisor
 italiano: ricerca e valutazione di manager e specialisti senior. Ricevi i DATI DI RICERCA
 su un'azienda target e devi personalizzare l'apertura di una email di presentazione.
 
 FORMULA FISSA (non modificarla, completa solo i due segnaposto):
-"sono Luca Roberto Schoenbech, consulente indipendente e Talent Search Advisor. Mi occupo
+"sono Luca Roberto Schoenbech, Temporary Recruiter e Talent Search Advisor. Mi occupo
 di ricerca e valutazione di manager e specialisti senior, con particolare attenzione ai
 profili <PROFILI> nel settore <SETTORE>."
 

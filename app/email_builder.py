@@ -27,7 +27,7 @@ LOGO = _STATIC_LOGO if _STATIC_LOGO.exists() else _WIN_LOGO
 
 SUBJECT = "Recruitment As a Service : Schoenbech | Talent Advisory"
 
-APERTURA_BASE = ("sono Luca Roberto Schoenbech, consulente indipendente e Talent Search Advisor. "
+APERTURA_BASE = ("sono Luca Roberto Schoenbech, **Temporary Recruiter** e Talent Search Advisor. "
                  "Mi occupo di ricerca e valutazione di manager e specialisti senior")
 
 CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro: ogni ricerca comprende **una mappatura del mercato** costruita attraverso i colloqui diretti con i professionisti contattati.
@@ -227,7 +227,7 @@ def build_email(row, message_no=1, tpl=None):
     saluto = row.get("saluto", "")
     # Apertura ricalcolata da contesto/gancio: testo semplice identico all'HTML
     # (paragrafo_apertura salvato all'import resta solo come fallback).
-    apertura = build_apertura(row.get("contesto", ""), row.get("gancio", ""))
+    apertura = _plain(build_apertura(row.get("contesto", ""), row.get("gancio", "")))
     buongiorno = saluto_orario()
     ricordato = row.get("saluto_originale") or buongiorno
     corpo_orig = f"{apertura}\n\n{corpo}\n\n{CLOSING}\n{FIRMA_NOME}\n\n{PRIVACY}"
@@ -282,8 +282,9 @@ I suoi dati di contatto professionali provengono da banche dati B2B e da fonti p
 
 
 def _intro_html(contesto, gancio):
-    return build_apertura(contesto, gancio,
-                          esc=lambda x: f"<strong>{html.escape(x)}</strong>")
+    apertura = build_apertura(contesto, gancio,
+                              esc=lambda x: f"<strong>{html.escape(x)}</strong>")
+    return re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", apertura)
 
 
 LINK_ANCHOR = (f'<a href="{LINK}" style="color:#b08d57;font-weight:bold;text-decoration:none;">'
