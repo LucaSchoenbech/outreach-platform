@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Email singola — Schoenbech Outreach</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
+    <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
+  </a>
+  <nav class="nav"><a href="/">Campagne</a><a href="/logout">Esci</a></nav>
+</header>
+
+<div class="wrap" style="max-width:900px">
+  {% if request.query_params.get('msg') %}
+    <div class="banner {% if 'Errore' in request.query_params.get('msg') %}err{% endif %}">{{ request.query_params.get('msg') }}</div>
+  {% endif %}
+  <div class="card">
+    <h3 style="margin-top:0">Email singola</h3>
+    <p class="hint">Inserisci un referente: l'AI genera l'apertura (profili + settore) nel formato standard,
+      poi controlli l'anteprima e puoi inviare solo questa email.</p>
+    <form method="post" action="/singola/crea">
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <div style="width:130px">
+          <label>Titolo</label>
+          <select name="titolo">
+            <option value="">(auto)</option>
+            <option>Dott.</option>
+            <option>Dott.ssa</option>
+            <option>Ing.</option>
+            <option>Avv.</option>
+          </select>
+        </div>
+        <div style="flex:1;min-width:180px"><label>Nome *</label><input name="nome" required></div>
+        <div style="flex:1;min-width:180px"><label>Cognome *</label><input name="cognome" required></div>
+      </div>
+      <div style="height:10px"></div>
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:220px"><label>Azienda *</label><input name="azienda" required></div>
+        <div style="flex:1;min-width:220px"><label>Email *</label><input name="email" type="email" required></div>
+      </div>
+      <div style="height:10px"></div>
+      <label>Ruolo (opzionale)</label>
+      <input name="ruolo">
+      <div style="height:16px"></div>
+      <h3 style="margin:6px 0">Per la personalizzazione</h3>
+      <p class="hint" style="margin-top:0">Compila <b>Attività</b> (e, se vuoi, <b>Competenze</b>): l'AI genera
+        settore e profili. Oppure scrivi direttamente <b>Settore</b> e <b>Profili</b> già pronti.</p>
+      <label>Attività / business dell'azienda (per l'AI)</label>
+      <textarea name="info" rows="3" placeholder="Es. azienda di componentistica aeraulica: progettazione e produzione di unità di trattamento aria per ospedali e industria"></textarea>
+      <div style="height:10px"></div>
+      <label>Competenze / profili tipici (opzionale, per l'AI)</label>
+      <input name="competenze" placeholder="Es. progettisti meccanici, tecnici di produzione, commerciali export">
+      <div style="height:14px"></div>
+      <div class="row" style="gap:10px;flex-wrap:wrap">
+        <div style="flex:1;min-width:260px">
+          <label>Settore (già pronto, dopo "nel settore ...")</label>
+          <input name="settore" placeholder="Es. della componentistica aeraulica per unità di trattamento aria">
+        </div>
+        <div style="flex:1;min-width:260px">
+          <label>Profili (già pronti, dopo "ai profili di ...")</label>
+          <input name="profili" placeholder="Es. progettisti meccanici, tecnici di produzione">
+        </div>
+      </div>
+      <div style="height:16px"></div>
+      <button class="btn green" type="submit">Genera e mostra anteprima</button>
+    </form>
+  </div>
+</div>
+</body>
+</html>

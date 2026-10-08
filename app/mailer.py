@@ -235,3 +235,32 @@ def do_test(rows, channel, message_no=1):
         return f"TEST inviato a {ch['user']}."
     except Exception as e:
         return f"Errore TEST: {e}"
+
+
+def send_singolo(row, channel, salva_copia=True):
+    """Invia subito UNA singola email al destinatario (dalla pagina anteprima)."""
+    mancanti = link_mancanti(get_email_template())
+    if mancanti:
+        return f"Invio bloccato: link non configurato ({', '.join(mancanti)})."
+    ch = channel_config(channel)
+    try:
+        smtp = smtplib.SMTP_SSL(ch["server"], ch["port"], timeout=30)
+        smtp.login(ch["user"], ch["password"])
+        msg = build_message(row, ch["user"], message_no=1)
+        smtp.send_message(msg)
+        smtp.quit()
+    except Exception as e:
+        _persist(row, 1, channel, "", False, str(e))
+        return f"Errore invio: {e}"
+    _persist(row, 1, channel, str(msg["Subject"]), True)
+    copia_err = ""
+    if salva_copia:
+        try:
+            imap, sent_folder = imap_connect(channel)
+            if sent_folder:
+                imap.append(sent_folder, "\\Seen",
+                            imaplib.Time2Internaldate(time.time()), msg.as_bytes())
+            imap.logout()
+        except Exception as e:
+            copia_err = f" (copia non salvata: {e})"
+    return f"Email inviata a {row['email']}{copia_err}"

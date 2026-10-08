@@ -9,6 +9,7 @@ import re
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import quote_plus
 
 import pandas as pd
 from fastapi import FastAPI, Request, Form, File, UploadFile, Depends
@@ -614,6 +615,108 @@ def testo_reset(user=Depends(require_user)):
     finally:
         db.close()
     return RedirectResponse("/testo?msg=Testo+ripristinato", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Email singola (inserimento manuale di un referente)
+# ---------------------------------------------------------------------------
+@app.get("/singola", response_class=HTMLResponse)
+def singola_page(request: Request, user=Depends(require_user)):
+    return templates.TemplateResponse(request, "singola.html", {})
+
+
+@app.post("/singola/crea")
+def singola_crea(titolo: str = Form(""), nome: str = Form(""), cognome: str = Form(""),
+                 azienda: str = Form(""), email: str = Form(""), ruolo: str = Form(""),
+                 info: str = Form(""), competenze: str = Form(""),
+                 settore: str = Form(""), profili: str = Form(""),
+                 user=Depends(require_user)):
+    nome, cognome = nome.strip(), cognome.strip()
+    azienda, email = azienda.strip(), email.strip()
+    if not (nome and cognome and azienda and email):
+        return RedirectResponse("/singola?msg=Compila+nome,+cognome,+azienda+ed+email", status_code=303)
+    db = SessionLocal()
+    ai_msg, ccid = "", None
+    try:
+        camp = db.query(models.Campaign).filter_by(name="Singoli").first()
+        if not camp:
+            camp = models.Campaign(name="Singoli", created_by=user.get("u"))
+            db.add(camp)
+            db.flush()
+        norm = _norm(azienda)
+        comp = db.query(models.Company).filter_by(normalized_name=norm).first()
+        if not comp:
+            comp = models.Company(legal_name=azienda, normalized_name=norm, source="singola")
+            db.add(comp)
+            db.flush()
+        con = (db.query(models.Contact)
+               .filter_by(company_id=comp.company_id, email_normalized=email.lower()).first())
+        if not con:
+            con = models.Contact(company_id=comp.company_id, email=email,
+                                 email_normalized=email.lower(), first_name=nome, last_name=cognome,
+                                 role=ruolo.strip(), source="singola")
+            db.add(con)
+            db.flush()
+        else:
+            con.email, con.first_name, con.last_name = email, nome, cognome
+            if ruolo.strip():
+                con.role = ruolo.strip()
+        contesto, gancio = settore.strip(), profili.strip()
+        if not (contesto and gancio) and (info.strip() or competenze.strip()):
+            try:
+                out = ai.generate_personalization({
+                    "azienda": azienda, "attivita": info.strip(), "competenze": competenze.strip(),
+                    "segnale": "", "alert": "", "timing": ""})
+                contesto = (out.get("contesto") or "").strip() or contesto
+                gancio = (out.get("gancio") or "").strip() or gancio
+            except Exception as e:
+                ai_msg = f" (AI non disponibile: {e})"
+        cc = (db.query(models.CampaignCompany)
+              .filter_by(campaign_id=camp.campaign_id, company_id=comp.company_id).first())
+        if not cc:
+            cc = models.CampaignCompany(campaign_id=camp.campaign_id, company_id=comp.company_id)
+            db.add(cc)
+        cc.contact_id = con.contact_id
+        if contesto:
+            cc.contesto = contesto
+        if gancio:
+            cc.gancio = gancio
+        cc.saluto = build_saluto(f"{nome} {cognome}", titolo=titolo.strip())
+        cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
+        cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and email) else "Bozza"
+        db.commit()
+        ccid = cc.campaign_company_id
+    except Exception as e:
+        ai_msg = f"Errore: {e}"
+    finally:
+        db.close()
+    if not ccid:
+        return RedirectResponse(f"/singola?msg={quote_plus(ai_msg or 'Errore nella creazione')}", status_code=303)
+    return RedirectResponse(f"/preview/{ccid}?msg={quote_plus('Email creata' + ai_msg)}", status_code=303)
+
+
+@app.post("/singola/invia/{cc_id}")
+def singola_invia(cc_id: str, channel: str = Form("Gmail"), salva_copia: str = Form(""),
+                  user=Depends(require_user)):
+    db = SessionLocal()
+    msg = ""
+    try:
+        cc = db.get(models.CampaignCompany, cc_id)
+        if not cc:
+            return RedirectResponse("/", status_code=303)
+        camp = db.get(models.Campaign, cc.campaign_id)
+        row = _row_from_cc(db, cc, camp)
+        gia = (db.query(models.OutreachMessage)
+               .filter_by(campaign_company_id=cc.campaign_company_id, message_no=1, status="sent").first())
+        if gia:
+            msg = "Questa email risulta gia inviata"
+        elif not row["email"]:
+            msg = "Manca l'indirizzo email"
+        else:
+            msg = mailer.send_singolo(row, channel, salva_copia=(salva_copia == "on"))
+    finally:
+        db.close()
+    return RedirectResponse(f"/preview/{cc_id}?msg={quote_plus(msg)}", status_code=303)
 
 
 # ---------------------------------------------------------------------------

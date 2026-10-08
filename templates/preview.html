@@ -13,7 +13,7 @@
     <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
     <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
   </a>
-  <nav class="nav"><a href="/">Campagne</a><a href="/logout">Esci</a></nav>
+  <nav class="nav"><a href="/">Campagne</a><a href="/singola">Email singola</a><a href="/logout">Esci</a></nav>
 </header>
 
 <div class="wrap" style="max-width:900px">
@@ -54,6 +54,18 @@
       <button class="btn" type="submit">Rigenera personalizzazione AI</button>
     </form>
     <a class="link-gold" href="/campaign/{{ cid }}" style="margin-left:14px">← Torna alla campagna</a>
+  </div>
+  <div class="card">
+    <h3 style="margin-top:0">Invia questa email</h3>
+    <p class="hint">Invia subito <b>solo questa email</b> (non tutta la campagna).</p>
+    <form method="post" action="/singola/invia/{{ i }}" class="row" style="gap:8px"
+          onsubmit="return confirm('Inviare questa email a {{ row.email }}?');">
+      <select name="channel" style="width:auto"><option>Gmail</option><option>Aruba</option></select>
+      <label style="margin:0;text-transform:none;font-size:12px;display:flex;align-items:center;gap:6px;font-weight:600">
+        <input type="checkbox" name="salva_copia" value="on" checked> Copia in Posta inviata
+      </label>
+      <button class="btn green" type="submit">Invia ora</button>
+    </form>
   </div>
 </div>
 </body>
