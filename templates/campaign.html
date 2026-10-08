@@ -53,8 +53,9 @@
 
   <div class="card">
     <h3>Personalizzazione AI</h3>
-    <p class="hint">Genera <b>settore</b> e <b>profili</b> dell'apertura dai dati di ricerca (Attività, Competenze, Segnale, Alert) con Gemini.
-      Gli alert sensibili ricevono un gancio neutro. Provider: <b>{{ ai_state.provider }}</b> · Modello: <b>{{ ai_state.model }}</b>.</p>
+    <p class="hint">Genera <b>settore</b> e <b>profili</b> dell'apertura dai dati di ricerca (Attività, Competenze, Segnale, Alert).
+      Se i dati di ricerca mancano, può variare quelli già presenti in bozza (versione leggermente diversa).
+      Provider: <b>{{ ai_state.provider }}</b> · Modello: <b>{{ ai_state.model }}</b>.</p>
     <div class="row" style="margin-top:10px">
       <form method="post" action="/campaign/{{ camp.campaign_id }}/genera-ai"
             onsubmit="return confirm('Generare la personalizzazione AI per {{ n_ricerca }} aziende?');">
@@ -65,7 +66,7 @@
       <span class="muted" id="ai-info"></span>
     </div>
     {% if n_ricerca == 0 %}
-      <div class="hint" style="margin-top:8px">Nessun dato di ricerca: importa il file di ricerca (Claude/Lusha) con le colonne Attività, Competenze, Segnale, Alert.</div>
+      <div class="hint" style="margin-top:8px">Nessuna riga da elaborare: importa il file con le colonne Attività, Competenze, Segnale, Alert — oppure compila Settore/Profili (l'AI può comunque variarli).</div>
     {% endif %}
     <div id="aicard" style="{% if not ai_state.running and not ai_state.error %}display:none{% endif %};margin-top:10px">
       <div class="bar"><div id="aifill"></div></div>

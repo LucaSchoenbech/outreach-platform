@@ -290,7 +290,8 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
         n_ricerca = sum(1 for cc in db.query(models.CampaignCompany)
                         .filter_by(campaign_id=camp.campaign_id).all()
                         if (cc.ricerca_attivita or cc.ricerca_competenze
-                            or cc.ricerca_segnale or cc.alert_text))
+                            or cc.ricerca_segnale or cc.alert_text
+                            or (cc.contesto or "").strip() or (cc.gancio or "").strip()))
     finally:
         db.close()
     return templates.TemplateResponse(request, "campaign.html", {
@@ -452,15 +453,21 @@ def genera_ai(cid: str, user=Depends(require_user)):
             return RedirectResponse("/", status_code=303)
         rows = []
         for cc in db.query(models.CampaignCompany).filter_by(campaign_id=camp.campaign_id).all():
-            if not (cc.ricerca_attivita or cc.ricerca_competenze or cc.ricerca_segnale or cc.alert_text):
+            ha_ricerca = (cc.ricerca_attivita or cc.ricerca_competenze
+                          or cc.ricerca_segnale or cc.alert_text)
+            ha_attuale = (cc.contesto or "").strip() or (cc.gancio or "").strip()
+            if not ha_ricerca and not ha_attuale:
                 continue
             comp = db.get(models.Company, cc.company_id)
             nome = comp.legal_name if comp else ""
-            rows.append({"cc_id": cc.campaign_company_id, "azienda": nome,
-                         "data": {"azienda": nome, "attivita": cc.ricerca_attivita or "",
-                                  "competenze": cc.ricerca_competenze or "",
-                                  "segnale": cc.ricerca_segnale or "",
-                                  "alert": cc.alert_text or "", "timing": cc.timing or ""}})
+            data = {"azienda": nome, "attivita": cc.ricerca_attivita or "",
+                    "competenze": cc.ricerca_competenze or "",
+                    "segnale": cc.ricerca_segnale or "",
+                    "alert": cc.alert_text or "", "timing": cc.timing or ""}
+            if ha_attuale:
+                data["versione_attuale"] = {"settore": (cc.contesto or "").strip(),
+                                            "profili": (cc.gancio or "").strip()}
+            rows.append({"cc_id": cc.campaign_company_id, "azienda": nome, "data": data})
     finally:
         db.close()
     if not rows:

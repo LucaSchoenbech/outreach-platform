@@ -158,7 +158,8 @@ def build_apertura(contesto, gancio, esc=lambda x: x):
     """'…senior, con particolare attenzione ai profili <profili> nel settore <settore>.'"""
     profili, settore = apertura_parti(contesto, gancio)
     if profili and settore:
-        coda = f", con particolare attenzione ai profili {esc(profili)} nel settore {esc(settore)}."
+        coda = (f", con particolare attenzione ai profili {esc(profili)} "
+                f"(anche) nel settore {esc(settore)}.")
     elif profili:
         coda = f", con particolare attenzione ai profili {esc(profili)}."
     elif settore:

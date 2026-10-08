@@ -73,7 +73,18 @@ GUARDRAIL:
 - Timing "BASSO" o con "MONITORARE" -> profili generici, "tipo_gancio": "Neutro".
 - Timing con "VERIFICARE" -> "flag": "Verifica".
 - Alert che corregge il settore (errato/troppo stretto/incompleto) -> "flag": "Correzione".
-- Se non c'è materiale sufficiente -> "gancio": "" e "tipo_gancio": "Neutro".
+- Se non ci sono né dati di ricerca né "versione_attuale" -> "gancio": "" e
+  "tipo_gancio": "Neutro".
+
+VERSIONE ATTUALE (campo "versione_attuale" nei DATI, quando i dati di ricerca sono
+assenti o scarsi):
+- Contiene il settore ("settore") e i profili ("profili") già presenti in bozza.
+- Mantieni la sostanza: stesso settore e profili coerenti con quelli attuali.
+- Proponi SEMPRE una versione leggermente diversa: riordina o riformula i profili e,
+  quando pertinente, integra 1-2 famiglie di profili in più o una breve precisazione
+  sulle competenze. Non ricopiare identica la versione attuale.
+- Obiettivo: una versione leggermente diversa della stessa apertura, senza stravolgere
+  settore e profili.
 
 DATI DI RICERCA (JSON):
 """
@@ -195,7 +206,11 @@ def generate_one(cc_id):
                 "attivita": cc.ricerca_attivita or "", "competenze": cc.ricerca_competenze or "",
                 "segnale": cc.ricerca_segnale or "", "alert": cc.alert_text or "",
                 "timing": cc.timing or ""}
-        if not any([data["attivita"], data["competenze"], data["segnale"], data["alert"]]):
+        if (cc.contesto or "").strip() or (cc.gancio or "").strip():
+            data["versione_attuale"] = {"settore": (cc.contesto or "").strip(),
+                                        "profili": (cc.gancio or "").strip()}
+        if not any([data["attivita"], data["competenze"], data["segnale"], data["alert"]]) \
+                and "versione_attuale" not in data:
             return "Nessun dato di ricerca per questo contatto"
         out = generate_personalization(data)
         cc.contesto = (out.get("contesto") or "").strip()
