@@ -138,6 +138,7 @@ def _profili(gancio):
         return ""
     if g.lower().startswith("profili "):
         g = g[len("profili "):]
+    g = re.sub(r"^di\s+", "", g, flags=re.IGNORECASE).strip()
     return g
 
 
@@ -158,10 +159,10 @@ def build_apertura(contesto, gancio, esc=lambda x: x):
     """'…senior, con particolare attenzione ai profili <profili> nel settore <settore>.'"""
     profili, settore = apertura_parti(contesto, gancio)
     if profili and settore:
-        coda = (f", con particolare attenzione ai profili {esc(profili)} "
+        coda = (f", con particolare attenzione ai profili di {esc(profili)} "
                 f"(anche) nel settore {esc(settore)}.")
     elif profili:
-        coda = f", con particolare attenzione ai profili {esc(profili)}."
+        coda = f", con particolare attenzione ai profili di {esc(profili)}."
     elif settore:
         coda = f", con particolare attenzione al settore {esc(settore)}."
     else:
