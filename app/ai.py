@@ -45,16 +45,16 @@ settore della nutrizione biologica e dei biostimolanti per l'agricoltura."
 
 Rispondi SOLO con un oggetto JSON con questi campi:
 - "contesto" = <SETTORE>: completa "nel settore ...". Inizia con "del ", "della ",
-  "dei ", "delle ", "degli " o "dell'". Descrive il settore e l'attività CONCRETA
-  dell'azienda (prodotti, tecnologie, mercato servito), non una categoria generica.
-  Massimo 12 parole. Niente punto finale.
+  "dei ", "delle ", "degli " o "dell'". Sintetico: descrive il settore e l'attività
+  concreta dell'azienda (prodotti, tecnologie, mercato servito), senza elencare troppe
+  cose. Massimo 12 parole. Niente punto finale.
 - "gancio" = <PROFILI>: completa "ai profili ...". Elenco di 2-3 famiglie di profili
-  davvero rilevanti per quell'azienda, ciascuna con la specializzazione concreta che
-  emerge dai dati (es. "di produzione, process engineering su impianti a ciclo continuo e
-  manutenzione", "di validazione GMP, technology transfer e qualità", "di stampi,
-  automation e progettazione dispenser"). Massimo 14 parole. Solo qualifiche e
-  specializzazioni: NON ripetere la parola "profili", niente verbi, niente frasi relative
-  ("dove", "in cui"), niente giudizi di scarsità o di mercato, niente punto finale.
+  concrete ma CONCISE (es. "di produzione, process engineering e manutenzione su impianti
+  a ciclo continuo", "di validazione GMP, technology transfer e qualità", "di
+  refrigerazione, progettazione meccanica ed elettronica"). Massimo 12 parole in totale.
+  Solo qualifiche e specializzazioni: NON ripetere la parola "profili", niente verbi,
+  niente frasi relative ("dove", "in cui"), niente giudizi di scarsità o di mercato,
+  niente punto finale.
 - "tipo_gancio": "Neutro" se i profili sono generici, altrimenti "Visibilità".
 - "flag": uno tra "OK", "Correzione", "Verifica", "Sensibile".
 
@@ -66,12 +66,26 @@ QUALITÀ (profili concreti e distintivi, non generici):
   quando i dati offrono elementi specifici: usali.
 - Se i dati suggeriscono un gancio, i profili devono riprenderne la sostanza tecnica
   (es. "impianti a ciclo continuo", "refrigeranti naturali", "GMP", "stampi", "customs").
+- CONCISIONE: la frase deve restare scorrevole. 2-3 voci essenziali, non elenchi lunghi
+  o dettagli sovrabbondanti.
+- NIENTE RIPETIZIONI tra settore e profili, nemmeno con parole della stessa famiglia
+  (es. "radiofarmaci"/"radiofarmaceutico", "farmaci"/"farmaceutico"): il termine
+  distintivo va di norma nel settore; nei profili usa concetti diversi.
+- Esempio da NON produrre (ripetitivo e prolisso):
+    settore: "dei radiofarmaci e delle terapie con radioligandi in oncologia"
+    profili: "QA/QC e microbiologia per produzioni sterili, radiochemici e ingegneri di
+    impianto radiofarmaceutico"
+  Versione corretta per gli stessi dati:
+    settore: "dei radiofarmaci e dei radioligandi in oncologia"
+    profili: "di QA/QC e microbiologia per produzioni sterili, radiochemica e ingegneria
+    di impianto"
 
 REGOLE TASSATIVE:
 - La formula fissa non si cambia: produci SOLO i due segnaposto.
 - Coerenza: i profili devono essere quelli che un'azienda di quel settore cerca
   davvero (tecnici, produzione, qualità, R&D, regulatory, commerciali, operations...).
-- Il settore non deve ripetere parole dei profili e viceversa.
+- Il settore non deve ripetere parole dei profili e viceversa (vale anche per parole
+  della stessa famiglia).
 - NON inventare: clienti, incarichi svolti, conoscenza diretta dell'azienda, dati non
   verificati. Niente numeri, fatturati, acquisizioni, nomi di clienti.
 - Italiano naturale e sobrio, tono professionale senior: niente toni commerciali,
