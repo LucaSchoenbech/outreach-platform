@@ -40,6 +40,55 @@ def imap_config(channel):
     return (config.IMAP_SERVER, config.IMAP_PORT, config.SENDER_EMAIL, config.SMTP_PASSWORD)
 
 
+def _ora_roma():
+    try:
+        from zoneinfo import ZoneInfo
+        return datetime.now(ZoneInfo("Europe/Rome"))
+    except Exception:
+        return datetime.now()
+
+
+def _hhmm(valore):
+    try:
+        h, m = str(valore).strip().split(":")
+        return int(h) * 60 + int(m)
+    except Exception:
+        return None
+
+
+def nella_finestra(adesso=None):
+    """True se l'ora italiana è dentro la finestra di invio configurata."""
+    adesso = adesso or _ora_roma()
+    inizio, fine = _hhmm(config.SEND_WINDOW_START), _hhmm(config.SEND_WINDOW_END)
+    if inizio is None or fine is None:
+        return True
+    ora = adesso.hour * 60 + adesso.minute
+    return inizio <= ora < fine
+
+
+def inviate_oggi():
+    """Numero di email inviate oggi (giorno italiano)."""
+    from app import models
+    adesso = _ora_roma()
+    inizio = adesso.replace(hour=0, minute=0, second=0, microsecond=0)
+    try:
+        if inizio.tzinfo is not None:
+            inizio = inizio.astimezone(timezone.utc)
+    except Exception:
+        pass
+    db = SessionLocal()
+    try:
+        return (db.query(models.OutreachMessage)
+                .filter(models.OutreachMessage.status == "sent",
+                        models.OutreachMessage.sent_at >= inizio).count())
+    finally:
+        db.close()
+
+
+def tetto_raggiunto():
+    return inviate_oggi() >= config.DAILY_LIMIT
+
+
 def build_message(row, sender, to=None, message_no=1):
     tpl = get_email_template()
     subject, body_text = build_email(row, message_no, tpl)
@@ -125,13 +174,19 @@ def _persist(row, message_no, channel, subject, ok, err=""):
         db.close()
 
 
-def run_send(rows, channel, salva_copia=True, message_no=1):
+def run_send(rows, channel, salva_copia=True, message_no=1, finestra=False):
     mancanti = link_mancanti(get_email_template())
     if mancanti:
         with LOCK:
             STATE.update(running=False, finished=True, total=len(rows), done=0,
                          current="Invio bloccato",
                          error=f"Link non configurato: {', '.join(mancanti)}. Nessuna email inviata.")
+        return
+    if tetto_raggiunto():
+        with LOCK:
+            STATE.update(running=False, finished=True, total=len(rows), done=0,
+                         current=f"Tetto giornaliero raggiunto ({config.DAILY_LIMIT}): "
+                                 "riprendera' automaticamente", error="")
         return
     ch = channel_config(channel)
     with LOCK:
@@ -145,6 +200,16 @@ def run_send(rows, channel, salva_copia=True, message_no=1):
     try:
         for idx, row in enumerate(rows, 1):
             if STOP.is_set():
+                break
+            if finestra and not nella_finestra():
+                with LOCK:
+                    STATE["current"] = (f"Fuori finestra oraria ({config.SEND_WINDOW_START}\u2013"
+                                        f"{config.SEND_WINDOW_END}): riprendera' automaticamente")
+                break
+            if tetto_raggiunto():
+                with LOCK:
+                    STATE["current"] = (f"Tetto giornaliero raggiunto ({config.DAILY_LIMIT}): "
+                                        "riprendera' domani automaticamente")
                 break
             if smtp is None:
                 try:

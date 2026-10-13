@@ -18,7 +18,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import ai, mailer, models
-from app.config import APP_HOST, APP_PORT
+from app.config import APP_HOST, APP_PORT, DAILY_LIMIT, SEND_WINDOW_END, SEND_WINDOW_START
 from app.db import SessionLocal, init_db
 from app.email_builder import (
     LINK, LOGO, SUBJECT, build_apertura, build_email, build_email_html, build_saluto,
@@ -69,9 +69,42 @@ ALIASES = {
 from contextlib import asynccontextmanager
 
 
+def _scheduler_loop():
+    """Avvia automaticamente gli invii programmati, dentro la finestra oraria e sotto il tetto."""
+    import threading
+    import time as _time
+    while True:
+        try:
+            _time.sleep(45)
+            if mailer.STATE.get("running") or not mailer.nella_finestra() or mailer.tetto_raggiunto():
+                continue
+            db = SessionLocal()
+            try:
+                for camp in db.query(models.Campaign).filter_by(auto_send=True).all():
+                    rows = _ready_rows(db, camp)
+                    if not rows:
+                        camp.auto_send = False
+                        db.commit()
+                        continue
+                    with mailer.LOCK:
+                        if mailer.STATE.get("running"):
+                            break
+                    mailer.STOP.clear()
+                    threading.Thread(target=mailer.run_send,
+                                     args=(rows, camp.channel, True, 1, True),
+                                     daemon=True).start()
+                    break
+            finally:
+                db.close()
+        except Exception:
+            pass
+
+
 @asynccontextmanager
 async def lifespan(_app):
     init_db()
+    import threading
+    threading.Thread(target=_scheduler_loop, daemon=True).start()
     yield
 
 
@@ -871,6 +904,9 @@ def invio_page(request: Request, cid: str, user=Depends(require_user)):
     return templates.TemplateResponse(request, "invio.html", {
         "camp": camp, "rows": rows, "tot": len(rows),
         "state": mailer.STATE, "mode": "invio", "user": user,
+        "auto_send": camp.auto_send, "inviate_oggi": mailer.inviate_oggi(),
+        "nella_finestra": mailer.nella_finestra(), "daily_limit": DAILY_LIMIT,
+        "win_start": SEND_WINDOW_START, "win_end": SEND_WINDOW_END,
     })
 
 
@@ -887,6 +923,9 @@ def recall_page(request: Request, cid: str, user=Depends(require_user)):
     return templates.TemplateResponse(request, "invio.html", {
         "camp": camp, "rows": rows, "tot": len(rows),
         "state": mailer.STATE, "mode": "recall", "user": user,
+        "auto_send": camp.auto_send, "inviate_oggi": mailer.inviate_oggi(),
+        "nella_finestra": mailer.nella_finestra(), "daily_limit": DAILY_LIMIT,
+        "win_start": SEND_WINDOW_START, "win_end": SEND_WINDOW_END,
     })
 
 
@@ -909,8 +948,10 @@ def invio_start(cid: str = Form(""), mode: str = Form("invio"), channel: str = F
     if mailer.STATE.get("running"):
         return RedirectResponse(f"/campaign/{cid}/{mode}?msg=Invio+gia+in+corso", status_code=303)
     db = SessionLocal()
+    finestra = False
     try:
         camp = db.get(models.Campaign, cid)
+        finestra = bool(camp.auto_send) if camp else False
         rows = _recall_rows(db, camp) if mode == "recall" else _ready_rows(db, camp)
     finally:
         db.close()
@@ -919,9 +960,23 @@ def invio_start(cid: str = Form(""), mode: str = Form("invio"), channel: str = F
     mailer.STOP.clear()
     import threading
     threading.Thread(target=mailer.run_send,
-                     args=(rows, channel, salva_copia == "on", 2 if mode == "recall" else 1),
+                     args=(rows, channel, salva_copia == "on", 2 if mode == "recall" else 1, finestra),
                      daemon=True).start()
     return RedirectResponse(f"/campaign/{cid}/{mode}", status_code=303)
+
+
+@app.post("/campaign/{cid}/auto-send")
+def auto_send_toggle(cid: str, attiva: str = Form("1"), back: str = Form("/"),
+                     user=Depends(require_user)):
+    db = SessionLocal()
+    try:
+        camp = db.get(models.Campaign, cid)
+        if camp:
+            camp.auto_send = (attiva == "1")
+            db.commit()
+    finally:
+        db.close()
+    return RedirectResponse(back or f"/campaign/{cid}", status_code=303)
 
 
 @app.post("/invio/stop")

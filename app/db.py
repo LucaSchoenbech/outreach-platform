@@ -49,3 +49,10 @@ def init_db():
                               "DROP CONSTRAINT IF EXISTS ux_cc"))
     except Exception:
         pass
+    # Migrazione: flag di programmazione invio automatico sulla campagna.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(f'ALTER TABLE "{DB_SCHEMA}".campaign '
+                              "ADD COLUMN IF NOT EXISTS auto_send BOOLEAN NOT NULL DEFAULT FALSE"))
+    except Exception:
+        pass
