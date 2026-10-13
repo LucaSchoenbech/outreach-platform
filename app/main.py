@@ -18,7 +18,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from app import ai, mailer, models
-from app.config import APP_HOST, APP_PORT, DAILY_LIMIT, SEND_WINDOW_END, SEND_WINDOW_START
+from app.config import (APP_HOST, APP_PORT, AUTOSEND, DAILY_LIMIT, SEND_WINDOW_END,
+                        SEND_WINDOW_START)
 from app.db import SessionLocal, init_db
 from app.email_builder import (
     LINK, LOGO, SUBJECT, build_apertura, build_email, build_email_html, build_saluto,
@@ -76,6 +77,8 @@ def _scheduler_loop():
     while True:
         try:
             _time.sleep(45)
+            if not AUTOSEND:
+                continue
             if mailer.STATE.get("running") or not mailer.nella_finestra() or mailer.tetto_raggiunto():
                 continue
             db = SessionLocal()

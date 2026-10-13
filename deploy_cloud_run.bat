@@ -22,9 +22,9 @@ call gcloud run deploy %SERVICE% ^
   --source . ^
   --region %REGION% ^
   --allow-unauthenticated ^
-  --min-instances 1 ^
+  --min-instances 0 ^
   --max-instances 1 ^
-  --no-cpu-throttling ^
+  --cpu-throttling ^
   --add-cloudsql-instances %INSTANCE% ^
   --set-secrets "DATABASE_URL=OUTREACH_DATABASE_URL:latest,SECRET_KEY=OUTREACH_SESSION_SECRET:latest,ADMIN_PASSWORD=OUTREACH_ADMIN_PASSWORD:latest,SMTP_PASSWORD=OUTREACH_SMTP_PASSWORD:latest,ARUBA_PASSWORD=OUTREACH_ARUBA_PASSWORD:latest,GEMINI_API_KEY=GEMINI_API_KEY:latest,DEEPSEEK_API_KEY=OUTREACH_DEEPSEEK_API_KEY:latest" ^
   --env-vars-file "%~dp0cloudrun_env.yaml"

@@ -54,6 +54,8 @@ PAUSE_EVERY = _get_int("PAUSE_EVERY", 10)
 SEND_WINDOW_START = _get("SEND_WINDOW_START", "09:30")
 SEND_WINDOW_END = _get("SEND_WINDOW_END", "12:00")
 DAILY_LIMIT = _get_int("DAILY_LIMIT", 100)
+# Motore di invio automatico: "on" (app locale) / "off" (cloud: prepara solo)
+AUTOSEND = _get("AUTOSEND", "on").strip().lower() != "off"
 
 APP_HOST = _get("APP_HOST", "127.0.0.1")
 APP_PORT = _get_int("APP_PORT", 8788)
