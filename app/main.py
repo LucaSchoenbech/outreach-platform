@@ -303,8 +303,8 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
 
 
 @app.post("/import/{cid}")
-async def import_file(cid: str, file: UploadFile = File(...), user=Depends(require_user)):
-    content = await file.read()
+def import_file(cid: str, file: UploadFile = File(...), user=Depends(require_user)):
+    content = file.file.read()
     try:
         parsed = parse_uploaded(content, file.filename or "")
     except Exception as e:
