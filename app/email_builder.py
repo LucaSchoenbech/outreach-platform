@@ -28,7 +28,7 @@ LOGO = _STATIC_LOGO if _STATIC_LOGO.exists() else _WIN_LOGO
 SUBJECT = "Recruitment As a Service : Schoenbech | Talent Advisory"
 
 APERTURA_BASE = ("sono Luca Roberto Schoenbech, **Temporary Recruiter** e Talent Search Advisor. "
-                 "Mi occupo di ricerca e valutazione di manager e specialisti senior")
+                 "Mi occupo di supporto alla ricerca e valutazione di manager e specialisti senior")
 
 CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro: ogni ricerca comprende **una mappatura del mercato** costruita attraverso i colloqui diretti con i professionisti contattati.
 
@@ -136,9 +136,17 @@ def _profili(gancio):
     g = str(gancio).strip().rstrip(".")
     if not g or g.lower().startswith(_GANCIO_LEGACY) or len(g.split()) > 14:
         return ""
-    if g.lower().startswith("profili "):
-        g = g[len("profili "):]
-    g = re.sub(r"^di\s+", "", g, flags=re.IGNORECASE).strip()
+    prefissi = ("i profili di ", "il profilo di ", "profili di ", "i profili ",
+                "profili ", "il profilo ", "di ")
+    cambiato = True
+    while cambiato:
+        cambiato = False
+        basso = g.lower()
+        for p in prefissi:
+            if basso.startswith(p):
+                g = g[len(p):].strip()
+                cambiato = True
+                break
     return g
 
 
