@@ -55,8 +55,8 @@ APP_PORT = _get_int("APP_PORT", 8788)
 
 # --- DeepSeek (provider AI principale) ---
 DEEPSEEK_API_KEY = _get("DEEPSEEK_API_KEY")
-DEEPSEEK_MODEL = _get("DEEPSEEK_MODEL", "deepseek-v4.1-flash")
-DEEPSEEK_MODEL_FALLBACKS = _get("DEEPSEEK_MODEL_FALLBACKS", "deepseek-chat")
+DEEPSEEK_MODEL = _get("DEEPSEEK_MODEL", "deepseek-v4-pro")
+DEEPSEEK_MODEL_FALLBACKS = _get("DEEPSEEK_MODEL_FALLBACKS", "deepseek-flash")
 
 # --- Gemini (fallback) ---
 GEMINI_API_KEY = _get("GEMINI_API_KEY")
