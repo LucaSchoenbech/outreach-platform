@@ -129,12 +129,14 @@ def build_saluto(contatto, titolo=""):
 
 
 # Connettori del vecchio "gancio" (frase lunga): non sono profili, non vanno in apertura.
-_GANCIO_LEGACY = ("dove ", "in cui ", "ambiti ", "settori ", "contesti ", "una fase ", "nei quali ")
+_GANCIO_LEGACY = ("dove ", "in cui ", "ambito in cui", "ambiti ", "settori ", "contesti ",
+                  "una fase ", "fase in cui", "nei quali ")
 
 
 def _profili(gancio):
     g = str(gancio).strip().rstrip(".")
-    if not g or g.lower().startswith(_GANCIO_LEGACY) or len(g.split()) > 14:
+    basso = g.lower()
+    if not g or len(g.split()) > 24 or any(c in basso for c in _GANCIO_LEGACY):
         return ""
     prefissi = ("i profili di ", "il profilo di ", "profili di ", "i profili ",
                 "profili ", "il profilo ", "di ")
