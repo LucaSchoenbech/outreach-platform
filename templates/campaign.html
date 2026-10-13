@@ -63,7 +63,9 @@
   <div class="card">
     <h3>Personalizzazione AI</h3>
     <p class="hint">Genera <b>settore</b> e <b>profili</b> dell'apertura dai dati di ricerca (Attività, Competenze, Segnale, Alert).
-      Se i dati di ricerca mancano, può variare quelli già presenti in bozza (versione leggermente diversa).
+      Se i dati di ricerca mancano, può variare quelli già presenti in bozza (versione leggermente diversa).<br>
+      Genera <b>solo le righe in stato Bozza</b>: le righe già <b>Pronte</b> (viste o corrette) non vengono toccate —
+      per rigenerarne una singola usa il tasto <b>AI</b> sulla riga.<br>
       Provider: <b>{{ ai_state.provider }}</b> · Modello: <b>{{ ai_state.model }}</b>.</p>
     <div class="row" style="margin-top:10px">
       <form method="post" action="/campaign/{{ camp.campaign_id }}/genera-ai"

@@ -325,7 +325,7 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
         ready = _ready_rows(db, camp)
         due = _recall_rows(db, camp)
         n_ricerca = sum(1 for cc in db.query(models.CampaignCompany)
-                        .filter_by(campaign_id=camp.campaign_id).all()
+                        .filter_by(campaign_id=camp.campaign_id, draft_status="Bozza").all()
                         if (cc.ricerca_attivita or cc.ricerca_competenze
                             or cc.ricerca_segnale or cc.alert_text
                             or (cc.contesto or "").strip() or (cc.gancio or "").strip()))
@@ -558,6 +558,8 @@ def genera_ai(cid: str, user=Depends(require_user)):
             return RedirectResponse("/", status_code=303)
         rows = []
         for cc in db.query(models.CampaignCompany).filter_by(campaign_id=camp.campaign_id).all():
+            if cc.draft_status != "Bozza":  # le righe gia' Pronte/Escluse non si rigenerano
+                continue
             ha_ricerca = (cc.ricerca_attivita or cc.ricerca_competenze
                           or cc.ricerca_segnale or cc.alert_text)
             ha_attuale = (cc.contesto or "").strip() or (cc.gancio or "").strip()
