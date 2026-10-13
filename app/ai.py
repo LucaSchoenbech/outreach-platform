@@ -49,13 +49,23 @@ Rispondi SOLO con un oggetto JSON con questi campi:
   dell'azienda (prodotti, tecnologie, mercato servito), non una categoria generica.
   Massimo 12 parole. Niente punto finale.
 - "gancio" = <PROFILI>: completa "ai profili ...". Elenco di 2-3 famiglie di profili
-  davvero rilevanti per quell'azienda (es. "tecnici, agronomici e di sviluppo prodotto",
-  "di produzione, qualità e sviluppo materiali", "commerciali e di application
-  engineering"). Massimo 8 parole. Solo aggettivi/specificazioni: NON ripetere la parola
-  "profili", niente verbi, niente frasi relative ("dove", "in cui"), niente giudizi di
-  scarsità o di mercato, niente punto finale.
+  davvero rilevanti per quell'azienda, ciascuna con la specializzazione concreta che
+  emerge dai dati (es. "di produzione, process engineering su impianti a ciclo continuo e
+  manutenzione", "di validazione GMP, technology transfer e qualità", "di stampi,
+  automation e progettazione dispenser"). Massimo 14 parole. Solo qualifiche e
+  specializzazioni: NON ripetere la parola "profili", niente verbi, niente frasi relative
+  ("dove", "in cui"), niente giudizi di scarsità o di mercato, niente punto finale.
 - "tipo_gancio": "Neutro" se i profili sono generici, altrimenti "Visibilità".
 - "flag": uno tra "OK", "Correzione", "Verifica", "Sensibile".
+
+QUALITÀ (profili concreti e distintivi, non generici):
+- Nei dati di ricerca trovi attività, competenze e spesso una frase "Il gancio è ...":
+  estrai gli elementi distintivi (tecnologie, processi, prodotti, normative, mercati) e
+  trasformali in profili e competenze concrete.
+- VIETATO limitarsi a elenchi generici ("tecnici e manageriali", "produzione e qualità")
+  quando i dati offrono elementi specifici: usali.
+- Se i dati suggeriscono un gancio, i profili devono riprenderne la sostanza tecnica
+  (es. "impianti a ciclo continuo", "refrigeranti naturali", "GMP", "stampi", "customs").
 
 REGOLE TASSATIVE:
 - La formula fissa non si cambia: produci SOLO i due segnaposto.

@@ -354,9 +354,9 @@ async def import_file(cid: str, file: UploadFile = File(...), user=Depends(requi
             if r["email"] and con:
                 con.email = r["email"]
                 con.email_normalized = r["email"].lower()
-            if r["contesto"]:
+            if r["contesto"] and not (cc.contesto or "").strip():
                 cc.contesto = r["contesto"]
-            if r["gancio"]:
+            if r["gancio"] and not (cc.gancio or "").strip():
                 cc.gancio = r["gancio"]
             if r["timing"]:
                 cc.timing = r["timing"]
