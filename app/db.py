@@ -42,3 +42,10 @@ def init_db():
     ensure_schema()
     import app.models  # noqa: F401  (registra i modelli)
     Base.metadata.create_all(engine)
+    # Migrazione: consente più interlocutori della stessa azienda nella stessa campagna.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(f'ALTER TABLE "{DB_SCHEMA}".campaign_company '
+                              "DROP CONSTRAINT IF EXISTS ux_cc"))
+    except Exception:
+        pass

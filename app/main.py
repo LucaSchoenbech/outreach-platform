@@ -13,7 +13,7 @@ from urllib.parse import quote_plus
 
 import pandas as pd
 from fastapi import FastAPI, Request, Form, File, UploadFile, Depends
-from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -317,80 +317,148 @@ async def import_file(cid: str, file: UploadFile = File(...), user=Depends(requi
             return RedirectResponse("/", status_code=303)
         for r in parsed:
             norm = _norm(r["azienda"])
-            cc = (db.query(models.CampaignCompany)
-                  .join(models.Company, models.CampaignCompany.company_id == models.Company.company_id)
-                  .filter(models.CampaignCompany.campaign_id == camp.campaign_id,
-                          models.Company.normalized_name == norm).first())
-            if cc:  # aggiorna la riga esistente (no duplicati)
-                con = db.get(models.Contact, cc.contact_id) if cc.contact_id else None
-                if r["email"]:
-                    if con:
-                        con.email = r["email"]
-                        con.email_normalized = r["email"].lower()
-                    else:
-                        nomi, cognome = dividi_nome(r["contatto"])
-                        con = models.Contact(company_id=cc.company_id, email=r["email"],
-                                             email_normalized=r["email"].lower(),
-                                             first_name=nomi, last_name=cognome,
-                                             source="import")
-                        db.add(con)
-                        db.flush()
-                        cc.contact_id = con.contact_id
-                if r["contesto"]:
-                    cc.contesto = r["contesto"]
-                if r["gancio"]:
-                    cc.gancio = r["gancio"]
-                if r["timing"]:
-                    cc.timing = r["timing"]
-                if r["flag"]:
-                    cc.flag = r["flag"]
-                if r["contatto"]:
-                    cc.saluto = build_saluto(r["contatto"])
-                    if con:
-                        nomi, cognome = dividi_nome(r["contatto"])
-                        con.first_name, con.last_name = nomi, cognome
-                if r.get("ricerca_attivita"):
-                    cc.ricerca_attivita = r["ricerca_attivita"]
-                if r.get("ricerca_competenze"):
-                    cc.ricerca_competenze = r["ricerca_competenze"]
-                if r.get("ricerca_segnale"):
-                    cc.ricerca_segnale = r["ricerca_segnale"]
-                if r.get("alert_text"):
-                    cc.alert_text = r["alert_text"]
-                cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
-                em = (con.email if con else "") or ""
-                cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
-                updated += 1
-                continue
-            comp = models.Company(legal_name=r["azienda"] or "(senza nome)",
-                                  normalized_name=norm, source="import")
-            db.add(comp)
-            db.flush()
+            comp = db.query(models.Company).filter_by(normalized_name=norm).first()
+            if not comp:
+                comp = models.Company(legal_name=r["azienda"] or "(senza nome)",
+                                      normalized_name=norm, source="import")
+                db.add(comp)
+                db.flush()
             con = None
             if r["email"]:
-                nomi, cognome = dividi_nome(r["contatto"])
-                con = models.Contact(company_id=comp.company_id, email=r["email"],
-                                     email_normalized=r["email"].lower(),
-                                     first_name=nomi, last_name=cognome,
-                                     source="import")
-                db.add(con)
+                con = (db.query(models.Contact)
+                       .filter_by(company_id=comp.company_id,
+                                  email_normalized=r["email"].lower()).first())
+                if not con:
+                    nomi, cognome = dividi_nome(r["contatto"])
+                    con = models.Contact(company_id=comp.company_id, email=r["email"],
+                                         email_normalized=r["email"].lower(),
+                                         first_name=nomi, last_name=cognome, source="import")
+                    db.add(con)
+                    db.flush()
+            # riga campagna = stessa azienda + stesso interlocutore (più contatti per azienda ammessi)
+            cc = (db.query(models.CampaignCompany)
+                  .filter_by(campaign_id=camp.campaign_id, company_id=comp.company_id)
+                  .filter(models.CampaignCompany.contact_id == (con.contact_id if con else None))
+                  .first())
+            if not cc and con:  # adotta una riga esistente senza contatto
+                cc = (db.query(models.CampaignCompany)
+                      .filter_by(campaign_id=camp.campaign_id, company_id=comp.company_id)
+                      .filter(models.CampaignCompany.contact_id.is_(None)).first())
+            nuovo = False
+            if not cc:
+                cc = models.CampaignCompany(campaign_id=camp.campaign_id, company_id=comp.company_id)
+                db.add(cc)
                 db.flush()
-            cc = models.CampaignCompany(
-                campaign_id=camp.campaign_id, company_id=comp.company_id,
-                contact_id=con.contact_id if con else None,
-                contesto=r["contesto"], gancio=r["gancio"], timing=r["timing"],
-                flag=r["flag"], saluto=build_saluto(r["contatto"]),
-                paragrafo_apertura=build_apertura(r["contesto"], r["gancio"]),
-                ricerca_attivita=r.get("ricerca_attivita"), ricerca_competenze=r.get("ricerca_competenze"),
-                ricerca_segnale=r.get("ricerca_segnale"), alert_text=r.get("alert_text"),
-                draft_status="Pronta" if (r["contesto"] and r["gancio"] and r["email"]) else "Bozza",
-            )
-            db.add(cc)
-            added += 1
+                nuovo = True
+            cc.contact_id = con.contact_id if con else None
+            if r["email"] and con:
+                con.email = r["email"]
+                con.email_normalized = r["email"].lower()
+            if r["contesto"]:
+                cc.contesto = r["contesto"]
+            if r["gancio"]:
+                cc.gancio = r["gancio"]
+            if r["timing"]:
+                cc.timing = r["timing"]
+            if r["flag"]:
+                cc.flag = r["flag"]
+            if r["contatto"]:
+                cc.saluto = build_saluto(r["contatto"])
+                if con:
+                    nomi, cognome = dividi_nome(r["contatto"])
+                    con.first_name, con.last_name = nomi, cognome
+            if r.get("ricerca_attivita"):
+                cc.ricerca_attivita = r["ricerca_attivita"]
+            if r.get("ricerca_competenze"):
+                cc.ricerca_competenze = r["ricerca_competenze"]
+            if r.get("ricerca_segnale"):
+                cc.ricerca_segnale = r["ricerca_segnale"]
+            if r.get("alert_text"):
+                cc.alert_text = r["alert_text"]
+            cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
+            em = (con.email if con else "") or ""
+            cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
+            if nuovo:
+                added += 1
+            else:
+                updated += 1
         db.commit()
     finally:
         db.close()
     return RedirectResponse(f"/campaign/{cid}?msg=Aggiunti+{added},+aggiornati+{updated}", status_code=303)
+
+
+@app.post("/campaign/{cid}/rename")
+def rename_campaign(cid: str, name: str = Form(""), back: str = Form("/"),
+                    user=Depends(require_user)):
+    db = SessionLocal()
+    try:
+        camp = db.get(models.Campaign, cid)
+        if camp and name.strip():
+            camp.name = name.strip()
+            db.commit()
+    finally:
+        db.close()
+    return RedirectResponse(back or f"/campaign/{cid}", status_code=303)
+
+
+@app.get("/campaign/{cid}/report.xlsx")
+def campaign_report(cid: str, user=Depends(require_user)):
+    from openpyxl import Workbook
+    from openpyxl.utils import get_column_letter
+    db = SessionLocal()
+    try:
+        camp = db.get(models.Campaign, cid)
+        if not camp:
+            return RedirectResponse("/", status_code=303)
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Invii"
+        ws.append(["Azienda", "Referente", "Email", "Ruolo", "Stato bozza",
+                   "Email 1", "Data/ora invio 1", "Canale 1", "Errore 1",
+                   "Recall", "Data/ora recall", "Errore recall"])
+
+        def esito(m):
+            if not m:
+                return "Non inviata"
+            return "Inviata" if m.status == "sent" else "Errore"
+
+        def quando(m):
+            return m.sent_at.strftime("%d/%m/%Y %H:%M") if (m and m.sent_at) else ""
+
+        def errore(m, cc):
+            if not m or m.status == "sent":
+                return ""
+            ev = (db.query(models.OutreachEvent)
+                  .filter(models.OutreachEvent.campaign_id == cc.campaign_id,
+                          models.OutreachEvent.contact_id == cc.contact_id,
+                          models.OutreachEvent.event_type == "failed")
+                  .order_by(models.OutreachEvent.occurred_at.desc()).first())
+            return str((ev.payload or {}).get("error", ""))[:200] if ev else ""
+
+        for cc in db.query(models.CampaignCompany).filter_by(campaign_id=camp.campaign_id).all():
+            comp = db.get(models.Company, cc.company_id)
+            con = db.get(models.Contact, cc.contact_id) if cc.contact_id else None
+            m1 = (db.query(models.OutreachMessage)
+                  .filter_by(campaign_company_id=cc.campaign_company_id, message_no=1)
+                  .order_by(models.OutreachMessage.created_at.desc()).first())
+            m2 = (db.query(models.OutreachMessage)
+                  .filter_by(campaign_company_id=cc.campaign_company_id, message_no=2)
+                  .order_by(models.OutreachMessage.created_at.desc()).first())
+            ws.append([comp.legal_name if comp else "", cc.saluto or "",
+                       (con.email if con else ""), ((con.role if con else "") or ""),
+                       cc.draft_status, esito(m1), quando(m1), (m1.channel if m1 else ""),
+                       errore(m1, cc), esito(m2), quando(m2), errore(m2, cc)])
+        for i, w in enumerate([28, 26, 30, 24, 12, 12, 18, 10, 42, 12, 18, 42], 1):
+            ws.column_dimensions[get_column_letter(i)].width = w
+        bio = io.BytesIO()
+        wb.save(bio)
+        nome = "report_" + re.sub(r"[^A-Za-z0-9_-]+", "_", camp.name)[:40] + ".xlsx"
+        return Response(content=bio.getvalue(),
+                        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        headers={"Content-Disposition": f'attachment; filename="{nome}"'})
+    finally:
+        db.close()
 
 
 @app.post("/campaign/{cid}/delete")
@@ -562,7 +630,7 @@ def set_email(cc_id: str, email: str = Form(""), back: str = Form("/"), user=Dep
 
 @app.post("/apertura/{cc_id}")
 def set_apertura(cc_id: str, saluto: str = Form(""), contesto: str = Form(""), gancio: str = Form(""),
-                 back: str = Form("/"), user=Depends(require_user)):
+                 condividi: str = Form(""), back: str = Form("/"), user=Depends(require_user)):
     db = SessionLocal()
     try:
         cc = db.get(models.CampaignCompany, cc_id)
@@ -574,6 +642,18 @@ def set_apertura(cc_id: str, saluto: str = Form(""), contesto: str = Form(""), g
             con = db.get(models.Contact, cc.contact_id) if cc.contact_id else None
             em = (con.email if con else "") or ""
             cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
+            if condividi == "on":
+                fratelli = (db.query(models.CampaignCompany)
+                            .filter_by(campaign_id=cc.campaign_id, company_id=cc.company_id)
+                            .filter(models.CampaignCompany.campaign_company_id != cc.campaign_company_id)
+                            .all())
+                for altro in fratelli:
+                    altro.contesto = cc.contesto
+                    altro.gancio = cc.gancio
+                    altro.paragrafo_apertura = cc.paragrafo_apertura
+                    con2 = db.get(models.Contact, altro.contact_id) if altro.contact_id else None
+                    em2 = (con2.email if con2 else "") or ""
+                    altro.draft_status = "Pronta" if (altro.contesto and altro.gancio and em2) else "Bozza"
             db.commit()
     finally:
         db.close()

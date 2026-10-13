@@ -108,8 +108,6 @@ class CampaignCompany(Base):
     campaign: Mapped["Campaign"] = relationship(back_populates="campaign_companies")
     company: Mapped["Company"] = relationship(back_populates="campaign_companies")
 
-    __table_args__ = (UniqueConstraint("campaign_id", "company_id", name="ux_cc"),)
-
 
 class OutreachMessage(Base):
     __tablename__ = "outreach_message"

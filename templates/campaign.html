@@ -27,11 +27,19 @@
 
   <div class="card">
     <div class="row spread">
-      <h3 style="margin:0">{{ camp.name }}</h3>
-      <form method="post" action="/campaign/{{ camp.campaign_id }}/delete"
-            onsubmit="return confirm('Eliminare la campagna e tutti i suoi contatti?');">
-        <button class="btn sm red" type="submit">Elimina campagna</button>
+      <form method="post" action="/campaign/{{ camp.campaign_id }}/rename" class="row"
+            style="gap:8px;margin:0;flex:1">
+        <input name="name" value="{{ camp.name }}" style="min-width:220px;flex:1">
+        <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}">
+        <button class="btn sm" type="submit" title="Rinomina la campagna">Rinomina</button>
       </form>
+      <div class="row" style="gap:8px">
+        <a class="btn sm" href="/campaign/{{ camp.campaign_id }}/report.xlsx" title="Scarica il report invii (Excel)">Scarica report</a>
+        <form method="post" action="/campaign/{{ camp.campaign_id }}/delete"
+              onsubmit="return confirm('Eliminare la campagna e tutti i suoi contatti?');">
+          <button class="btn sm red" type="submit">Elimina campagna</button>
+        </form>
+      </div>
     </div>
     <form method="post" action="/import/{{ camp.campaign_id }}" enctype="multipart/form-data" class="row">
       <div style="flex:1;min-width:220px">
