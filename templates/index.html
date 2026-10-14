@@ -31,6 +31,22 @@
   </div>
 
   <div class="card">
+    <h3>Risposte ricevute</h3>
+    <p class="hint">Controlla la posta in arrivo e segna chi ha risposto. Chi ha risposto
+    <b>non riceve il sollecito</b>, e una richiesta di rimozione viene messa in opt-out.
+    Vengono salvati data, mittente e oggetto — non il testo della risposta.</p>
+    <form method="post" action="/risposte/scan" class="row" style="margin-top:10px">
+      <input type="hidden" name="back" value="/">
+      <input name="giorni" type="number" min="1" max="365" placeholder="giorni (default 30)"
+             style="max-width:180px">
+      <button class="btn" type="submit">Controlla le risposte</button>
+    </form>
+    {% if request.query_params.get('msg') %}
+      <div class="banner {% if 'Errore' in request.query_params.get('msg') %}err{% endif %}" style="margin-top:12px">{{ request.query_params.get('msg') }}</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
     <h3>Le tue campagne</h3>
     <table class="resp">
       <thead><tr><th>Azienda / Nome</th><th>Contatti</th><th>Creata</th><th></th></tr></thead>

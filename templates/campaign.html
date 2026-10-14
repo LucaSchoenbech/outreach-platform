@@ -94,11 +94,12 @@
       <span class="tag Bozza">Bozze {{ counts.get('Bozza', 0) }}</span>
       <span class="tag Pronta">Pronte {{ counts.get('Pronta', 0) }}</span>
       <span class="tag Esclusa">Escluse {{ counts.get('Esclusa', 0) }}</span>
+      {% if n_risposte %}<span class="tag Pronta">Risposte {{ n_risposte }}</span>{% endif %}
       <span class="muted">totale {{ tot }}</span>
     </div>
     <input id="q" placeholder="Cerca azienda, contatto, email..." onkeyup="filtra()" style="margin-bottom:12px">
     <table class="resp" id="t">
-      <thead><tr><th>#</th><th>Azienda</th><th>Saluto</th><th>Email</th><th>Timing</th><th>Flag</th><th>Profili</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <thead><tr><th>#</th><th>Azienda</th><th>Saluto</th><th>Email</th><th>Timing</th><th>Flag</th><th>Profili</th><th>Risposta</th><th>Stato</th><th>Azioni</th></tr></thead>
       <tbody>
       {% for r in rows %}
         <tr>
@@ -118,6 +119,12 @@
           <td data-label="Timing">{{ r.timing }}</td>
           <td data-label="Flag"><span class="tag {{ r.flag }}">{{ r.flag }}</span></td>
           <td data-label="Profili" class="gancio">{{ r.gancio }}</td>
+          <td data-label="Risposta">
+            {% if r.risposto %}
+              <span class="tag Pronta" title="{{ r.risposta_oggetto }}">Ha risposto</span>
+              <div class="muted" style="font-size:11px;margin-top:3px">{{ r.risposto.strftime('%d/%m/%Y') }}</div>
+            {% else %}<span class="muted">—</span>{% endif %}
+          </td>
           <td data-label="Stato">
             <span class="tag {{ r.stato }}">{{ r.stato }}</span>
             {% if r.motivo %}<div class="muted" style="font-size:11px;margin-top:3px">{{ r.motivo }}</div>{% endif %}
@@ -137,7 +144,7 @@
           </td>
         </tr>
       {% else %}
-        <tr><td colspan="9" class="muted">Nessun contatto. Carica un file qui sopra.</td></tr>
+        <tr><td colspan="10" class="muted">Nessun contatto. Carica un file qui sopra.</td></tr>
       {% endfor %}
       </tbody>
     </table>
