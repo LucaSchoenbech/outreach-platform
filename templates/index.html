@@ -39,10 +39,55 @@
       <input type="hidden" name="back" value="/">
       <input name="giorni" type="number" min="1" max="365" placeholder="giorni (default 30)"
              style="max-width:180px">
-      <button class="btn" type="submit">Controlla le risposte</button>
+      <button class="btn" type="submit" id="scanbtn">Controlla le risposte</button>
     </form>
+
+    <div id="scancard" style="display:none;margin-top:12px">
+      <div class="bar"><div id="scanfill"></div></div>
+      <div class="muted" id="scancur" style="margin-top:6px"></div>
+    </div>
+
+    {% if scan_state.esito and not scan_state.running %}
+      <div class="banner {% if 'Errore' in scan_state.esito %}err{% endif %}" style="margin-top:12px">{{ scan_state.esito }}</div>
+    {% endif %}
     {% if request.query_params.get('msg') %}
-      <div class="banner {% if 'Errore' in request.query_params.get('msg') %}err{% endif %}" style="margin-top:12px">{{ request.query_params.get('msg') }}</div>
+      <div class="banner" style="margin-top:12px">{{ request.query_params.get('msg') }}</div>
+    {% endif %}
+
+    {% if risposte %}
+      <table class="resp" style="margin-top:16px">
+        <thead><tr><th>Chi</th><th>Azienda</th><th>Risposto</th><th>Oggetto</th><th></th></tr></thead>
+        <tbody>
+        {% for r in risposte %}
+          <tr>
+            <td data-label="Chi">
+              <b>{{ r.nome }}</b>
+              {% if r.opt_out %}<span class="tag Esclusa" style="margin-left:6px">opt-out</span>{% endif %}
+              <div class="muted" style="font-size:11px">
+                {{ r.risposta_da or r.email }}
+                {% if r.risposta_da and r.risposta_da != r.email %}
+                  <span title="Ha risposto da un indirizzo diverso da quello a cui hai scritto">(scritto a {{ r.email }})</span>
+                {% endif %}
+              </div>
+            </td>
+            <td data-label="Azienda">{{ r.azienda }}</td>
+            <td data-label="Risposto">
+              {{ r.quando.strftime('%d/%m/%Y') }}
+              <div class="muted" style="font-size:11px">{{ r.campagna }}</div>
+            </td>
+            <td data-label="Oggetto" class="gancio">{{ r.oggetto }}</td>
+            <td data-label="">
+              {% if r.cc_id %}<a class="link-gold" href="/preview/{{ r.cc_id }}" target="_blank">Apri</a>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div class="hint" style="margin-top:8px">{{ risposte|length }} contatti hanno risposto.
+      Nessuno di loro riceve il sollecito.</div>
+    {% else %}
+      <div class="hint" style="margin-top:12px">Nessuna risposta registrata. Lancia la scansione
+      per controllare la posta in arrivo.</div>
     {% endif %}
   </div>
 
@@ -65,5 +110,24 @@
     </table>
   </div>
 </div>
+<script>
+function scanPoll(){
+  fetch('/risposte/status').then(r=>r.json()).then(s=>{
+    if(s.running){
+      document.getElementById('scancard').style.display='';
+      document.getElementById('scanbtn').disabled = true;
+      var pct = s.total ? Math.round(100*s.done/s.total) : 0;
+      document.getElementById('scanfill').style.width = pct + '%';
+      document.getElementById('scancur').textContent =
+        'Controllo posta... ' + s.done + '/' + s.total +
+        ' · trovate ' + s.trovate + (s.current ? ' · ' + s.current : '');
+      setTimeout(scanPoll, 2000);
+    } else if(document.getElementById('scanbtn').disabled){
+      location.reload();
+    }
+  }).catch(()=>{});
+}
+scanPoll();
+</script>
 </body>
 </html>
