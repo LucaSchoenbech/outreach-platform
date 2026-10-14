@@ -281,9 +281,11 @@ def dashboard(request: Request, user=Depends(require_user)):
         for c in camps:
             n = db.query(models.CampaignCompany).filter_by(campaign_id=c.campaign_id).count()
             data.append({"c": c, "n": n})
+        risposte = replies.ultime_risposte(db)
     finally:
         db.close()
-    return templates.TemplateResponse(request, "index.html", {"campaigns": data, "user": user})
+    return templates.TemplateResponse(request, "index.html", {
+        "campaigns": data, "risposte": risposte, "scan_state": replies.STATE, "user": user})
 
 
 @app.post("/campaigns/new")
@@ -899,8 +901,14 @@ def _row_from_cc(db, cc, camp):
     }
 
 
-def _ready_rows(db, camp):
-    out = []
+def _partiziona_pronte(db, camp):
+    """Divide le righe Pronte fra (da_inviare, gia_contattati).
+
+    Il controllo sui duplicati vive QUI, al momento dell'invio, e non solo
+    all'import: cosi' vale per qualunque riga, anche per i file caricati
+    prima che il controllo esistesse.
+    """
+    out, bloccati = [], []
     for cc in db.query(models.CampaignCompany).filter_by(campaign_id=camp.campaign_id).all():
         if cc.draft_status != "Pronta":
             continue
@@ -912,8 +920,23 @@ def _ready_rows(db, camp):
             continue
         if db.query(models.OutreachMessage).filter_by(campaign_company_id=cc.campaign_company_id, message_no=1).first():
             continue
+        precedente = learning.gia_contattato(db, con.email, camp.campaign_id)
+        if precedente:
+            quando, campagna = precedente
+            bloccati.append({
+                "cc_id": str(cc.campaign_company_id),
+                "azienda": comp.legal_name if comp else "",
+                "email": con.email,
+                "quando": quando.strftime("%d/%m/%Y") if quando else "",
+                "campagna": campagna or "",
+            })
+            continue
         out.append(_row_from_cc(db, cc, camp))
-    return out
+    return out, bloccati
+
+
+def _ready_rows(db, camp):
+    return _partiziona_pronte(db, camp)[0]
 
 
 def _recall_rows(db, camp):
@@ -946,11 +969,11 @@ def invio_page(request: Request, cid: str, user=Depends(require_user)):
         camp = db.get(models.Campaign, cid)
         if not camp:
             return RedirectResponse("/", status_code=303)
-        rows = _ready_rows(db, camp)
+        rows, bloccati = _partiziona_pronte(db, camp)
     finally:
         db.close()
     return templates.TemplateResponse(request, "invio.html", {
-        "camp": camp, "rows": rows, "tot": len(rows),
+        "camp": camp, "rows": rows, "tot": len(rows), "bloccati": bloccati,
         "state": mailer.STATE, "mode": "invio", "user": user,
         "auto_send": camp.auto_send, "inviate_oggi": mailer.inviate_oggi(),
         "nella_finestra": mailer.nella_finestra(), "daily_limit": DAILY_LIMIT,
@@ -969,7 +992,7 @@ def recall_page(request: Request, cid: str, user=Depends(require_user)):
     finally:
         db.close()
     return templates.TemplateResponse(request, "invio.html", {
-        "camp": camp, "rows": rows, "tot": len(rows),
+        "camp": camp, "rows": rows, "tot": len(rows), "bloccati": [],
         "state": mailer.STATE, "mode": "recall", "user": user,
         "auto_send": camp.auto_send, "inviate_oggi": mailer.inviate_oggi(),
         "nella_finestra": mailer.nella_finestra(), "daily_limit": DAILY_LIMIT,
@@ -1045,15 +1068,18 @@ def invio_status(user=Depends(require_user)):
 @app.post("/risposte/scan")
 def risposte_scan(giorni: str = Form(""), back: str = Form("/"),
                   user=Depends(require_user)):
-    if replies.STATE.get("running"):
-        return RedirectResponse(f"{back}?msg=Scansione+gia+in+corso", status_code=303)
     try:
         n = int(giorni) if giorni.strip() else None
     except ValueError:
         n = None
-    msg = replies.scan_replies(n)
+    # Parte in background: la pagina torna subito e segue l'avanzamento
+    # da /risposte/status, senza rischiare il timeout della richiesta.
+    avviata = replies.avvia_scan(n)
     sep = "&" if "?" in back else "?"
-    return RedirectResponse(f"{back}{sep}msg={quote_plus(msg)}", status_code=303)
+    if not avviata:
+        return RedirectResponse(f"{back}{sep}msg={quote_plus('Scansione gia in corso')}",
+                                status_code=303)
+    return RedirectResponse(back or "/", status_code=303)
 
 
 @app.get("/risposte/status")

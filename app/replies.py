@@ -29,7 +29,9 @@ from app import config
 from app.db import SessionLocal
 
 STATE = {"running": False, "total": 0, "done": 0, "trovate": 0, "opt_out": 0,
-         "error": "", "current": "", "finished": False}
+         "error": "", "current": "", "finished": False, "esito": ""}
+
+COMMIT_OGNI = 20   # salva a blocchi: una scansione interrotta non perde il lavoro
 LOCK = threading.Lock()
 
 # Oggetto con cui l'informativa chiede la rimozione (email_builder.PRIVACY).
@@ -89,14 +91,15 @@ def _nostri_indirizzi():
 
 
 def scan_replies(giorni=None):
-    """Scansiona INBOX e segna le risposte. Ritorna un messaggio di esito."""
+    """Scansiona INBOX e segna le risposte. Ritorna un messaggio di esito.
+
+    La guardia "gia' in corso" sta in avvia_scan(), che e' il punto d'ingresso
+    normale: qui si entra gia' con STATE["running"] impostato.
+    """
     from app import models
     giorni = int(giorni or config.REPLY_SCAN_DAYS)
     with LOCK:
-        if STATE["running"]:
-            return "Scansione già in corso"
-        STATE.update(running=True, total=0, done=0, trovate=0, opt_out=0,
-                     error="", current="", finished=False)
+        STATE.update(running=True, error="", finished=False)
     imap = None
     db = SessionLocal()
     try:
@@ -110,8 +113,10 @@ def scan_replies(giorni=None):
             STATE["total"] = len(numeri)
         nostri = _nostri_indirizzi()
 
-        for num in numeri:
+        for i, num in enumerate(numeri, 1):
             _passo(db, imap, num, nostri, models)
+            if i % COMMIT_OGNI == 0:
+                db.commit()  # a blocchi: se si interrompe, quanto trovato resta
             with LOCK:
                 STATE["done"] += 1
         db.commit()
@@ -119,11 +124,13 @@ def scan_replies(giorni=None):
             esito = (f"Scansione completata: {STATE['trovate']} risposte, "
                      f"{STATE['opt_out']} richieste di rimozione "
                      f"(su {STATE['total']} messaggi degli ultimi {giorni} giorni)")
+            STATE["esito"] = esito
         return esito
     except Exception as e:
         db.rollback()
         with LOCK:
             STATE["error"] = str(e)
+            STATE["esito"] = f"Errore scansione: {e}"
         return f"Errore scansione: {e}"
     finally:
         db.close()
@@ -136,6 +143,21 @@ def scan_replies(giorni=None):
         with LOCK:
             STATE["running"] = False
             STATE["finished"] = True
+
+
+def avvia_scan(giorni=None):
+    """Lancia la scansione in un thread: la richiesta HTTP torna subito.
+
+    Serve su Cloud Run, dove una richiesta che supera il timeout verrebbe
+    troncata. L'avanzamento si legge da /risposte/status.
+    """
+    with LOCK:
+        if STATE["running"]:
+            return False
+        STATE.update(running=True, total=0, done=0, trovate=0, opt_out=0,
+                     error="", current="", finished=False, esito="")
+    threading.Thread(target=scan_replies, args=(giorni,), daemon=True).start()
+    return True
 
 
 def _passo(db, imap, num, nostri, models):
@@ -204,6 +226,39 @@ def _passo(db, imap, num, nostri, models):
         STATE["trovate"] += 1
         STATE["current"] = f"{mittente} — {oggetto[:60]}"
     return True
+
+
+def ultime_risposte(db, limite=60):
+    """Chi ha risposto, dal piu' recente: azienda, indirizzo, oggetto, campagna.
+
+    Un contatto puo' comparire in piu' campagne: si riporta la riga di campagna
+    piu' recente, che e' quella da cui si arriva alla sua anteprima.
+    """
+    from app import models
+    contatti = (db.query(models.Contact)
+                .filter(models.Contact.risposto_at.isnot(None))
+                .order_by(models.Contact.risposto_at.desc())
+                .limit(limite).all())
+    out = []
+    for con in contatti:
+        comp = db.get(models.Company, con.company_id) if con.company_id else None
+        cc = (db.query(models.CampaignCompany)
+              .filter_by(contact_id=con.contact_id)
+              .order_by(models.CampaignCompany.created_at.desc()).first())
+        camp = db.get(models.Campaign, cc.campaign_id) if cc else None
+        nome = " ".join(x for x in ((con.first_name or ""), (con.last_name or "")) if x).strip()
+        out.append({
+            "nome": nome or (con.email or ""),
+            "azienda": comp.legal_name if comp else "",
+            "email": con.email or "",
+            "risposta_da": con.risposta_da or "",
+            "quando": con.risposto_at,
+            "oggetto": con.risposta_oggetto or "",
+            "opt_out": bool(con.opt_out),
+            "cc_id": str(cc.campaign_company_id) if cc else "",
+            "campagna": camp.name if camp else "",
+        })
+    return out
 
 
 def conta_risposte(db, campaign_id=None):

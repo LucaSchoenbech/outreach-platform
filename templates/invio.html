@@ -105,6 +105,28 @@
     <pre class="log" id="plog"></pre>
   </div>
 
+  {% if bloccati %}
+  <div class="card">
+    <h3>Esclusi: gia' contattati ({{ bloccati|length }})</h3>
+    <p class="hint">Queste righe sono <b>Pronte</b> ma l'indirizzo risulta gia' raggiunto in
+    un'altra campagna, quindi <b>non partono</b>. Se vuoi scrivere comunque a qualcuno,
+    aprilo dalla pagina della campagna.</p>
+    <table class="resp">
+      <thead><tr><th>Azienda</th><th>Email</th><th>Gia' contattato</th><th>Campagna</th></tr></thead>
+      <tbody>
+      {% for b in bloccati %}
+        <tr>
+          <td data-label="Azienda"><b>{{ b.azienda }}</b></td>
+          <td data-label="Email">{{ b.email }}</td>
+          <td data-label="Gia' contattato">{{ b.quando }}</td>
+          <td data-label="Campagna">{{ b.campagna }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
   <div class="card">
     <h3>Contatti in coda</h3>
     <table class="resp">
