@@ -119,7 +119,7 @@ def _split(v):
     return [x.strip() for x in (v or "").split(",") if x.strip()]
 
 
-def _call_deepseek(text):
+def _call_deepseek(text, system=None):
     key = (config.DEEPSEEK_API_KEY or "").strip()
     if not key:
         raise AIError("DEEPSEEK_API_KEY non configurata")
@@ -131,7 +131,7 @@ def _call_deepseek(text):
                 "https://api.deepseek.com/chat/completions",
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 json={"model": model,
-                      "messages": [{"role": "system", "content": PROMPT},
+                      "messages": [{"role": "system", "content": system or PROMPT},
                                    {"role": "user", "content": text}],
                       "response_format": {"type": "json_object"},
                       "temperature": 0.4, "stream": False},
@@ -191,21 +191,40 @@ def _call_gemini(text):
     raise AIError(last or "Gemini non disponibile")
 
 
-def generate_personalization(data):
-    """Prova DeepSeek, poi Gemini. Ritorna dict {contesto, gancio, tipo_gancio, flag}."""
-    text = PROMPT + json.dumps(data, ensure_ascii=False)
+def build_prompt(esempi=""):
+    """Prompt di sistema, con le correzioni dell'operatore se presenti.
+
+    Il blocco esempi entra subito prima dei dati di ricerca, cosi' resta
+    l'ultima istruzione letta prima dell'input.
+    """
+    if not esempi:
+        return PROMPT
+    return PROMPT.replace("DATI DI RICERCA (JSON):",
+                          esempi.strip() + "\n\nDATI DI RICERCA (JSON):")
+
+
+def generate_personalization(data, esempi=""):
+    """Prova DeepSeek, poi Gemini. Ritorna dict {contesto, gancio, tipo_gancio, flag}.
+
+    `esempi` e' il blocco con le correzioni manuali precedenti (vedi
+    app/learning.py).
+    """
+    prompt = build_prompt(esempi)
+    dati = json.dumps(data, ensure_ascii=False)
     errors = []
     quota_msgs = []
     if config.DEEPSEEK_API_KEY:
         try:
-            return _call_deepseek(text)
+            # DeepSeek: istruzioni nel system, solo i dati nel messaggio utente.
+            return _call_deepseek(dati, prompt)
         except QuotaExhausted as e:
             quota_msgs.append(str(e))
         except Exception as e:
             errors.append(f"DeepSeek: {e}")
     if config.GEMINI_API_KEY:
         try:
-            return _call_gemini(text)
+            # Gemini: un unico turno, istruzioni e dati insieme.
+            return _call_gemini(prompt + dati)
         except QuotaExhausted as e:
             quota_msgs.append(str(e))
         except Exception as e:
@@ -217,7 +236,7 @@ def generate_personalization(data):
 
 def generate_one(cc_id):
     """Rigenera la personalizzazione di un singolo contatto. Ritorna un messaggio."""
-    from app import models
+    from app import learning, models
     from app.db import SessionLocal
     from app.email_builder import build_apertura
     db = SessionLocal()
@@ -237,9 +256,14 @@ def generate_one(cc_id):
         if not any([data["attivita"], data["competenze"], data["segnale"], data["alert"]]) \
                 and "versione_attuale" not in data:
             return "Nessun dato di ricerca per questo contatto"
-        out = generate_personalization(data)
+        # Solo le correzioni registrate prima dell'ingresso in campagna di questa
+        # riga: il lavoro in corso non cambia regole sotto i piedi.
+        esempi = learning.blocco_prompt(
+            learning.esempi_validi(learning.carica_correzioni(db), cc.created_at))
+        out = generate_personalization(data, esempi)
         cc.contesto = (out.get("contesto") or "").strip()
         cc.gancio = (out.get("gancio") or "").strip()
+        cc.contesto_ai, cc.gancio_ai = cc.contesto, cc.gancio
         cc.tipo_gancio = (out.get("tipo_gancio") or "").strip()
         if out.get("flag") in ("OK", "Correzione", "Verifica", "Sensibile"):
             cc.flag = out["flag"]
@@ -258,7 +282,7 @@ def generate_one(cc_id):
 
 def run_generate(rows):
     """rows = lista di {cc_id, azienda, data}. Gira in background."""
-    from app import models
+    from app import learning, models
     from app.db import SessionLocal
     from app.email_builder import build_apertura
     with AI_LOCK:
@@ -266,14 +290,17 @@ def run_generate(rows):
                         error="", quota=False, generated=0)
     db = SessionLocal()
     try:
+        correzioni = learning.carica_correzioni(db)
         for idx, row in enumerate(rows):
             if AI_STOP.is_set():
                 break
             with AI_LOCK:
                 AI_STATE["current"] = row.get("azienda", "")
             data = dict(row["data"])
+            esempi = learning.blocco_prompt(
+                learning.esempi_validi(correzioni, row.get("cutoff")))
             try:
-                out = generate_personalization(data)
+                out = generate_personalization(data, esempi)
             except QuotaExhausted as e:
                 with AI_LOCK:
                     AI_STATE["quota"] = True
@@ -287,6 +314,7 @@ def run_generate(rows):
             if cc:
                 cc.contesto = (out.get("contesto") or "").strip()
                 cc.gancio = (out.get("gancio") or "").strip()
+                cc.contesto_ai, cc.gancio_ai = cc.contesto, cc.gancio
                 cc.tipo_gancio = (out.get("tipo_gancio") or "").strip()
                 if out.get("flag") in ("OK", "Correzione", "Verifica", "Sensibile"):
                     cc.flag = out["flag"]

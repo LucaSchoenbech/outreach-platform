@@ -67,6 +67,10 @@
       Genera <b>solo le righe in stato Bozza</b>: le righe già <b>Pronte</b> (viste o corrette) non vengono toccate —
       per rigenerarne una singola usa il tasto <b>AI</b> sulla riga.<br>
       Provider: <b>{{ ai_state.provider }}</b> · Modello: <b>{{ ai_state.model }}</b>.</p>
+    {% if n_correzioni %}
+      <p class="hint">Memoria correzioni: <b>{{ n_correzioni }}</b> registrate. L'AI le usa come esempi
+      per <b>i file caricati dopo</b> la correzione — le righe già in lavorazione non cambiano.</p>
+    {% endif %}
     <div class="row" style="margin-top:10px">
       <form method="post" action="/campaign/{{ camp.campaign_id }}/genera-ai"
             onsubmit="return confirm('Generare la personalizzazione AI per {{ n_ricerca }} aziende?');">
@@ -114,7 +118,10 @@
           <td data-label="Timing">{{ r.timing }}</td>
           <td data-label="Flag"><span class="tag {{ r.flag }}">{{ r.flag }}</span></td>
           <td data-label="Profili" class="gancio">{{ r.gancio }}</td>
-          <td data-label="Stato"><span class="tag {{ r.stato }}">{{ r.stato }}</span></td>
+          <td data-label="Stato">
+            <span class="tag {{ r.stato }}">{{ r.stato }}</span>
+            {% if r.motivo %}<div class="muted" style="font-size:11px;margin-top:3px">{{ r.motivo }}</div>{% endif %}
+          </td>
           <td data-label="Azioni" class="actions">
             <a class="link-gold" href="/preview/{{ r.cc_id }}" target="_blank">Anteprima</a>
             <form method="post" action="/ai/regen/{{ r.cc_id }}" style="display:inline">

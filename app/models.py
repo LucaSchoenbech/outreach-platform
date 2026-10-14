@@ -88,8 +88,12 @@ class CampaignCompany(Base):
     status: Mapped[str] = mapped_column(Text, default="discovered", nullable=False)
 
     draft_status: Mapped[str] = mapped_column(Text, default="Bozza", nullable=False)  # Bozza|Pronta|Esclusa
+    escluso_motivo: Mapped[str | None] = mapped_column(Text)
     contesto: Mapped[str | None] = mapped_column(Text)
     gancio: Mapped[str | None] = mapped_column(Text)
+    # ultima proposta AI, conservata per riconoscere le correzioni manuali
+    contesto_ai: Mapped[str | None] = mapped_column(Text)
+    gancio_ai: Mapped[str | None] = mapped_column(Text)
     tipo_gancio: Mapped[str | None] = mapped_column(Text)
     timing: Mapped[str | None] = mapped_column(Text)
     flag: Mapped[str | None] = mapped_column(Text)
@@ -123,6 +127,9 @@ class OutreachMessage(Base):
     subject: Mapped[str] = mapped_column(Text, nullable=False)
     status: Mapped[str] = mapped_column(Text, default="queued", nullable=False)
     dedupe_key: Mapped[str] = mapped_column(Text, unique=True, nullable=False)
+    # apertura realmente spedita (memoria di cosa e' stato scritto, non solo a chi)
+    contesto: Mapped[str | None] = mapped_column(Text)
+    gancio: Mapped[str | None] = mapped_column(Text)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
@@ -162,6 +169,27 @@ class EmailTemplate(Base):
     corpo: Mapped[str | None] = mapped_column(Text)
     recall_text: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class AiCorrection(Base):
+    """Correzione manuale di una proposta AI: input, proposta, versione corretta.
+
+    Alimenta gli esempi del prompt. Il filtro temporale (una correzione vale
+    solo per i file caricati dopo) e' applicato in app/learning.py.
+    """
+
+    __tablename__ = "ai_correction"
+
+    correction_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=_uuid)
+    campaign_company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    company_id: Mapped[uuid.UUID | None] = mapped_column(Uuid)
+    azienda: Mapped[str | None] = mapped_column(Text)
+    dati_ricerca: Mapped[str | None] = mapped_column(Text)
+    contesto_ai: Mapped[str | None] = mapped_column(Text)
+    gancio_ai: Mapped[str | None] = mapped_column(Text)
+    contesto_corretto: Mapped[str | None] = mapped_column(Text)
+    gancio_corretto: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
 
 class Suppression(Base):
