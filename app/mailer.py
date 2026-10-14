@@ -12,7 +12,7 @@ from email.header import Header
 from email.mime.image import MIMEImage
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formataddr, formatdate
+from email.utils import formataddr, formatdate, make_msgid
 
 from app import config
 from app.db import SessionLocal
@@ -99,6 +99,10 @@ def build_message(row, sender, to=None, message_no=1):
     msg["To"] = to or row["email"]
     msg["Reply-To"] = config.REPLY_TO
     msg["Date"] = formatdate(localtime=True)
+    # Generato qui, non dal server: solo cosi' possiamo salvarlo e riconoscere
+    # la risposta via In-Reply-To/References (vedi app/replies.py).
+    dominio = (config.SENDER_EMAIL.split("@")[-1] or "").strip() or None
+    msg["Message-ID"] = make_msgid(domain=dominio)
     alt = MIMEMultipart("alternative")
     alt.attach(MIMEText(body_text, "plain", "utf-8"))
     alt.attach(MIMEText(html, "html", "utf-8"))
@@ -139,7 +143,7 @@ def imap_connect(channel):
     return imap, find_sent_folder(imap)
 
 
-def _persist(row, message_no, channel, subject, ok, err=""):
+def _persist(row, message_no, channel, subject, ok, err="", message_id=None):
     """Scrive messaggio + evento + stato nel DB (schema mass)."""
     from app import models
     db = SessionLocal()
@@ -156,7 +160,8 @@ def _persist(row, message_no, channel, subject, ok, err=""):
             # memoria dell'apertura spedita: serve a sapere cosa e' stato scritto,
             # non solo a chi (vedi app/learning.py)
             contesto=(row.get("contesto") or "").strip() or None,
-            gancio=(row.get("gancio") or "").strip() or None)
+            gancio=(row.get("gancio") or "").strip() or None,
+            message_id_header=(message_id or "").strip() or None)
         db.add(msg)
         ev = models.OutreachEvent(
             idempotency_key=f"out:{key}", event_type="sent" if ok else "failed",
@@ -230,7 +235,8 @@ def run_send(rows, channel, salva_copia=True, message_no=1, finestra=False):
                     STATE["done"] += 1
                     STATE["current"] = f"✓ {row.get('saluto', '')} ({row.get('azienda', '')})"
                     STATE["log"].append(f"SUCCESS - {row['email']} ({row.get('azienda', '')})")
-                _persist(row, message_no, channel, str(subject), True)
+                _persist(row, message_no, channel, str(subject), True,
+                         message_id=msg["Message-ID"])
                 if salva_copia:
                     try:
                         if imap is None or sent_folder is None:
@@ -321,7 +327,7 @@ def send_singolo(row, channel, salva_copia=True):
     except Exception as e:
         _persist(row, 1, channel, "", False, str(e))
         return f"Errore invio: {e}"
-    _persist(row, 1, channel, str(msg["Subject"]), True)
+    _persist(row, 1, channel, str(msg["Subject"]), True, message_id=msg["Message-ID"])
     copia_err = ""
     if salva_copia:
         try:

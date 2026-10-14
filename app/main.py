@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSON
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import ai, learning, mailer, models
+from app import ai, learning, mailer, models, replies
 from app.config import (APP_HOST, APP_PORT, AUTOSEND, DAILY_LIMIT, SEND_WINDOW_END,
                         SEND_WINDOW_START)
 from app.db import SessionLocal, init_db
@@ -319,6 +319,8 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
                 "tipo_gancio": cc.tipo_gancio or "", "gancio": cc.gancio or "",
                 "stato": cc.draft_status or "Bozza",
                 "motivo": cc.escluso_motivo or "",
+                "risposto": con.risposto_at if con else None,
+                "risposta_oggetto": (con.risposta_oggetto if con else "") or "",
             })
         counts = {}
         for r in rows:
@@ -331,12 +333,13 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
                             or cc.ricerca_segnale or cc.alert_text
                             or (cc.contesto or "").strip() or (cc.gancio or "").strip()))
         n_correzioni = learning.conta_correzioni(db)
+        n_risposte = replies.conta_risposte(db, camp.campaign_id)
     finally:
         db.close()
     return templates.TemplateResponse(request, "campaign.html", {
         "camp": camp, "rows": rows, "counts": counts, "tot": len(rows),
         "n_ready": len(ready), "n_due": len(due), "n_ricerca": n_ricerca,
-        "n_correzioni": n_correzioni,
+        "n_correzioni": n_correzioni, "n_risposte": n_risposte,
         "ai_state": ai.AI_STATE, "user": user,
     })
 
@@ -470,7 +473,8 @@ def campaign_report(cid: str, user=Depends(require_user)):
         ws.title = "Invii"
         ws.append(["Azienda", "Referente", "Email", "Ruolo", "Stato bozza",
                    "Email 1", "Data/ora invio 1", "Canale 1", "Errore 1",
-                   "Recall", "Data/ora recall", "Errore recall"])
+                   "Recall", "Data/ora recall", "Errore recall",
+                   "Ha risposto", "Data risposta", "Oggetto risposta"])
 
         def esito(m):
             if not m:
@@ -502,8 +506,13 @@ def campaign_report(cid: str, user=Depends(require_user)):
             ws.append([comp.legal_name if comp else "", cc.saluto or "",
                        (con.email if con else ""), ((con.role if con else "") or ""),
                        cc.draft_status, esito(m1), quando(m1), (m1.channel if m1 else ""),
-                       errore(m1, cc), esito(m2), quando(m2), errore(m2, cc)])
-        for i, w in enumerate([28, 26, 30, 24, 12, 12, 18, 10, 42, 12, 18, 42], 1):
+                       errore(m1, cc), esito(m2), quando(m2), errore(m2, cc),
+                       ("Si" if (con and con.risposto_at) else ""),
+                       (con.risposto_at.strftime("%d/%m/%Y %H:%M")
+                        if (con and con.risposto_at) else ""),
+                       ((con.risposta_oggetto if con else "") or "")])
+        for i, w in enumerate([28, 26, 30, 24, 12, 12, 18, 10, 42, 12, 18, 42,
+                               12, 18, 46], 1):
             ws.column_dimensions[get_column_letter(i)].width = w
         bio = io.BytesIO()
         wb.save(bio)
@@ -922,6 +931,8 @@ def _recall_rows(db, camp):
         con = db.get(models.Contact, cc.contact_id) if cc.contact_id else None
         if not con or not (con.email or "").strip() or con.opt_out:
             continue
+        if con.risposto_at:
+            continue  # ha gia' risposto: il sollecito non si manda
         row = _row_from_cc(db, cc, camp)
         row["saluto_originale"] = saluto_orario(m1.sent_at)
         out.append(row)
@@ -1026,6 +1037,29 @@ def invio_stop(cid: str = Form(""), mode: str = Form("invio"), user=Depends(requ
 def invio_status(user=Depends(require_user)):
     with mailer.LOCK:
         return JSONResponse(dict(mailer.STATE))
+
+
+# ---------------------------------------------------------------------------
+# Risposte ricevute
+# ---------------------------------------------------------------------------
+@app.post("/risposte/scan")
+def risposte_scan(giorni: str = Form(""), back: str = Form("/"),
+                  user=Depends(require_user)):
+    if replies.STATE.get("running"):
+        return RedirectResponse(f"{back}?msg=Scansione+gia+in+corso", status_code=303)
+    try:
+        n = int(giorni) if giorni.strip() else None
+    except ValueError:
+        n = None
+    msg = replies.scan_replies(n)
+    sep = "&" if "?" in back else "?"
+    return RedirectResponse(f"{back}{sep}msg={quote_plus(msg)}", status_code=303)
+
+
+@app.get("/risposte/status")
+def risposte_status(user=Depends(require_user)):
+    with replies.LOCK:
+        return JSONResponse(dict(replies.STATE))
 
 
 if __name__ == "__main__":

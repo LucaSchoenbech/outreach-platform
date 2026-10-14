@@ -60,7 +60,9 @@ def init_db():
     # motivo di esclusione e apertura realmente inviata.
     for tabella, colonne in (
         ("campaign_company", ("contesto_ai TEXT", "gancio_ai TEXT", "escluso_motivo TEXT")),
-        ("outreach_message", ("contesto TEXT", "gancio TEXT")),
+        ("outreach_message", ("contesto TEXT", "gancio TEXT", "message_id_header TEXT")),
+        ("contact", ("risposto_at TIMESTAMPTZ", "risposta_oggetto TEXT",
+                     "risposta_da TEXT")),
     ):
         for colonna in colonne:
             try:
@@ -69,3 +71,11 @@ def init_db():
                                       f"ADD COLUMN IF NOT EXISTS {colonna}"))
             except Exception:
                 pass
+    # Indice per l'aggancio delle risposte via In-Reply-To/References.
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(
+                f'CREATE INDEX IF NOT EXISTS ix_outreach_message_msgid '
+                f'ON "{DB_SCHEMA}".outreach_message (message_id_header)'))
+    except Exception:
+        pass

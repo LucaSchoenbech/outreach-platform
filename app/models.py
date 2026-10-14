@@ -55,6 +55,11 @@ class Contact(Base):
     source: Mapped[str | None] = mapped_column(Text)
     opt_out: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     opt_out_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Risposta ricevuta: sta sul contatto, non sulla riga di campagna, cosi'
+    # protegge la persona in tutte le campagne (vedi app/replies.py).
+    risposto_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    risposta_oggetto: Mapped[str | None] = mapped_column(Text)
+    risposta_da: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
@@ -130,6 +135,9 @@ class OutreachMessage(Base):
     # apertura realmente spedita (memoria di cosa e' stato scritto, non solo a chi)
     contesto: Mapped[str | None] = mapped_column(Text)
     gancio: Mapped[str | None] = mapped_column(Text)
+    # Message-ID generato all'invio: permette di agganciare la risposta al thread
+    # tramite In-Reply-To/References, senza dipendere dall'indirizzo del mittente.
+    message_id_header: Mapped[str | None] = mapped_column(Text, index=True)
     sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
 
