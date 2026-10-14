@@ -152,7 +152,11 @@ def _persist(row, message_no, channel, subject, ok, err=""):
             campaign_id=row["campaign_id"], campaign_company_id=row["cc_id"],
             contact_id=row.get("contact_id"), message_no=message_no, channel=channel.lower(),
             to_email=row["email"], subject=subject, status="sent" if ok else "failed",
-            dedupe_key=key, sent_at=datetime.now(timezone.utc) if ok else None)
+            dedupe_key=key, sent_at=datetime.now(timezone.utc) if ok else None,
+            # memoria dell'apertura spedita: serve a sapere cosa e' stato scritto,
+            # non solo a chi (vedi app/learning.py)
+            contesto=(row.get("contesto") or "").strip() or None,
+            gancio=(row.get("gancio") or "").strip() or None)
         db.add(msg)
         ev = models.OutreachEvent(
             idempotency_key=f"out:{key}", event_type="sent" if ok else "failed",

@@ -17,7 +17,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSON
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import ai, mailer, models
+from app import ai, learning, mailer, models
 from app.config import (APP_HOST, APP_PORT, AUTOSEND, DAILY_LIMIT, SEND_WINDOW_END,
                         SEND_WINDOW_START)
 from app.db import SessionLocal, init_db
@@ -318,6 +318,7 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
                 "timing": cc.timing or "", "flag": cc.flag or "OK",
                 "tipo_gancio": cc.tipo_gancio or "", "gancio": cc.gancio or "",
                 "stato": cc.draft_status or "Bozza",
+                "motivo": cc.escluso_motivo or "",
             })
         counts = {}
         for r in rows:
@@ -329,11 +330,13 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
                         if (cc.ricerca_attivita or cc.ricerca_competenze
                             or cc.ricerca_segnale or cc.alert_text
                             or (cc.contesto or "").strip() or (cc.gancio or "").strip()))
+        n_correzioni = learning.conta_correzioni(db)
     finally:
         db.close()
     return templates.TemplateResponse(request, "campaign.html", {
         "camp": camp, "rows": rows, "counts": counts, "tot": len(rows),
         "n_ready": len(ready), "n_due": len(due), "n_ricerca": n_ricerca,
+        "n_correzioni": n_correzioni,
         "ai_state": ai.AI_STATE, "user": user,
     })
 
@@ -346,7 +349,7 @@ def import_file(cid: str, file: UploadFile = File(...), user=Depends(require_use
     except Exception as e:
         return RedirectResponse(f"/campaign/{cid}?msg=Errore+import:+{e}", status_code=303)
     db = SessionLocal()
-    added = updated = 0
+    added = updated = duplicati = 0
     try:
         camp = db.get(models.Campaign, cid)
         if not camp:
@@ -413,7 +416,19 @@ def import_file(cid: str, file: UploadFile = File(...), user=Depends(require_use
                 cc.alert_text = r["alert_text"]
             cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
             em = (con.email if con else "") or ""
-            cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
+            # Un'esclusione (manuale o per duplicato) non si riapre da sola.
+            if cc.draft_status != "Esclusa":
+                cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
+                # Memoria degli invii: se questo indirizzo e' gia' stato raggiunto in
+                # un'altra campagna, la riga entra ma resta esclusa con il motivo.
+                precedente = learning.gia_contattato(db, em, camp.campaign_id)
+                if precedente:
+                    quando, campagna = precedente
+                    data_txt = quando.strftime("%d/%m/%Y") if quando else "data sconosciuta"
+                    cc.draft_status = "Esclusa"
+                    cc.escluso_motivo = (f"Gia' contattato il {data_txt}"
+                                         + (f" (campagna \u00ab{campagna}\u00bb)" if campagna else ""))
+                    duplicati += 1
             if nuovo:
                 added += 1
             else:
@@ -421,7 +436,10 @@ def import_file(cid: str, file: UploadFile = File(...), user=Depends(require_use
         db.commit()
     finally:
         db.close()
-    return RedirectResponse(f"/campaign/{cid}?msg=Aggiunti+{added},+aggiornati+{updated}", status_code=303)
+    msg = f"Aggiunti+{added},+aggiornati+{updated}"
+    if duplicati:
+        msg += f",+esclusi+{duplicati}+gia+contattati"
+    return RedirectResponse(f"/campaign/{cid}?msg={msg}", status_code=303)
 
 
 @app.post("/campaign/{cid}/rename")
@@ -574,7 +592,8 @@ def genera_ai(cid: str, user=Depends(require_user)):
             if ha_attuale:
                 data["versione_attuale"] = {"settore": (cc.contesto or "").strip(),
                                             "profili": (cc.gancio or "").strip()}
-            rows.append({"cc_id": cc.campaign_company_id, "azienda": nome, "data": data})
+            rows.append({"cc_id": cc.campaign_company_id, "azienda": nome, "data": data,
+                         "cutoff": cc.created_at})
     finally:
         db.close()
     if not rows:
@@ -673,6 +692,11 @@ def set_apertura(cc_id: str, saluto: str = Form(""), contesto: str = Form(""), g
     try:
         cc = db.get(models.CampaignCompany, cc_id)
         if cc:
+            # Prima di sovrascrivere: se l'operatore ha cambiato la proposta AI,
+            # la differenza viene salvata e insegnera' alle generazioni future.
+            comp = db.get(models.Company, cc.company_id)
+            learning.registra_correzione(db, cc, contesto, gancio,
+                                         azienda=comp.legal_name if comp else "")
             cc.saluto = saluto.strip()
             cc.contesto = contesto.strip()
             cc.gancio = gancio.strip()
@@ -780,13 +804,19 @@ def singola_crea(titolo: str = Form(""), nome: str = Form(""), cognome: str = Fo
             if ruolo.strip():
                 con.role = ruolo.strip()
         contesto, gancio = settore.strip(), profili.strip()
+        ai_ctx = ai_gan = ""
         if not (contesto and gancio) and (info.strip() or competenze.strip()):
             try:
+                esempi = learning.blocco_prompt(
+                    learning.esempi_validi(learning.carica_correzioni(db),
+                                           datetime.now(timezone.utc)))
                 out = ai.generate_personalization({
                     "azienda": azienda, "attivita": info.strip(), "competenze": competenze.strip(),
-                    "segnale": "", "alert": "", "timing": ""})
-                contesto = (out.get("contesto") or "").strip() or contesto
-                gancio = (out.get("gancio") or "").strip() or gancio
+                    "segnale": "", "alert": "", "timing": ""}, esempi)
+                ai_ctx = (out.get("contesto") or "").strip()
+                ai_gan = (out.get("gancio") or "").strip()
+                contesto = ai_ctx or contesto
+                gancio = ai_gan or gancio
             except Exception as e:
                 ai_msg = f" (AI non disponibile: {e})"
         cc = (db.query(models.CampaignCompany)
@@ -799,6 +829,8 @@ def singola_crea(titolo: str = Form(""), nome: str = Form(""), cognome: str = Fo
             cc.contesto = contesto
         if gancio:
             cc.gancio = gancio
+        if ai_ctx or ai_gan:  # tiene la proposta AI per riconoscere le correzioni
+            cc.contesto_ai, cc.gancio_ai = ai_ctx, ai_gan
         cc.saluto = build_saluto(f"{nome} {cognome}", titolo=titolo.strip())
         cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
         cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and email) else "Bozza"
