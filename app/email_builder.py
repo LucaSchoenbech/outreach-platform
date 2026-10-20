@@ -192,8 +192,32 @@ def _plain(testo):
     return str(testo).replace("**", "")
 
 
+# Indirizzi che NON devono finire in un'email: link di accesso a tempo della
+# piattaforma BI. Scadono da soli e, scaduti, rispondono 200 con una pagina di
+# errore, quindi nessun controllo sullo stato HTTP li smaschera.
+_URL_SCADENTI = re.compile(
+    r"https?://businessintelligence\.schoenbech\.com/\S*", re.I)
+
+
+def normalizza_link(testo):
+    """Converte gli indirizzi a scadenza nel segnaposto {LINK_MAPPATURA}.
+
+    Vale ovunque si trovino: nel testo salvato da /testo, nei default di
+    fabbrica, in un testo incollato oggi. Da qui in poi l'indirizzo lo decide
+    una sola fonte, la variabile LINK_MAPPATURA, e aggiornarla sistema tutte
+    le email, quelle gia' scritte e quelle future.
+    """
+    if not testo:
+        return testo
+    return _URL_SCADENTI.sub("{LINK_MAPPATURA}", str(testo))
+
+
 def get_email_template():
-    """Testo generale (oggetto, corpo, recall) da DB, con default di fabbrica."""
+    """Testo generale (oggetto, corpo, recall) da DB, con default di fabbrica.
+
+    Passaggio obbligato di anteprima, test, invio e recall: la normalizzazione
+    dei link sta qui, cosi' nessuna via la salta.
+    """
     tpl = {"subject": SUBJECT, "corpo": CORPO, "recall_text": RECALL_TEXT}
     try:
         from app import models
@@ -212,6 +236,8 @@ def get_email_template():
             db.close()
     except Exception:
         pass
+    tpl["corpo"] = normalizza_link(tpl["corpo"])
+    tpl["recall_text"] = normalizza_link(tpl["recall_text"])
     return tpl
 
 

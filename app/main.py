@@ -23,7 +23,7 @@ from app.config import (APP_HOST, APP_PORT, AUTOSEND, DAILY_LIMIT, SEND_WINDOW_E
 from app.db import SessionLocal, init_db
 from app.email_builder import (
     LINK, LOGO, SUBJECT, build_apertura, build_email, build_email_html, build_saluto,
-    dividi_nome, get_email_template, pulisci_nome, saluto_orario,
+    dividi_nome, get_email_template, normalizza_link, pulisci_nome, saluto_orario,
 )
 from app.security import COOKIE, check_password, make_token, read_token
 
@@ -749,12 +749,18 @@ def testo_save(subject: str = Form(""), corpo: str = Form(""), recall_text: str 
             row = models.EmailTemplate(template_id=1)
             db.add(row)
         row.subject = subject.strip() or None
-        row.corpo = corpo.strip() or None
-        row.recall_text = recall_text.strip() or None
+        # Un indirizzo a scadenza incollato qui verrebbe spedito per settimane:
+        # diventa subito il segnaposto, cosi' resta una sola fonte per il link.
+        row.corpo = normalizza_link(corpo.strip()) or None
+        row.recall_text = normalizza_link(recall_text.strip()) or None
         db.commit()
+        cambiato = (row.corpo != (corpo.strip() or None)
+                    or row.recall_text != (recall_text.strip() or None))
     finally:
         db.close()
-    return RedirectResponse("/testo?msg=Testo+salvato", status_code=303)
+    msg = ("Testo+salvato+(link+a+scadenza+sostituito+con+il+segnaposto)"
+           if cambiato else "Testo+salvato")
+    return RedirectResponse(f"/testo?msg={msg}", status_code=303)
 
 
 @app.post("/testo/reset")
