@@ -1063,6 +1063,16 @@ def auto_send_toggle(cid: str, attiva: str = Form("1"), mode: str = Form("invio"
 # ---------------------------------------------------------------------------
 # Avvio programmato dall'esterno (Cloud Scheduler)
 # ---------------------------------------------------------------------------
+def _pulisci_token(valore):
+    """Spazi, fine riga e BOM via dal token.
+
+    Un segreto caricato su Secret Manager da PowerShell con `>` arriva in
+    UTF-16 con BOM: senza questa pulizia il confronto fallirebbe sempre, e
+    l'unico sintomo sarebbe un 403 senza spiegazione.
+    """
+    return (valore or "").strip().lstrip("\ufeff").strip()
+
+
 @app.post("/scheduler/tick")
 def scheduler_tick(request: Request, token: str = ""):
     """Un colpo di scheduler: al piu' una email, poi torna subito.
@@ -1071,10 +1081,10 @@ def scheduler_tick(request: Request, token: str = ""):
     un browser: si autentica con SCHEDULER_TOKEN, nell'intestazione
     X-Scheduler-Token oppure in ?token=. Senza token configurato, chiuso.
     """
-    atteso = (SCHEDULER_TOKEN or "").strip()
+    atteso = _pulisci_token(SCHEDULER_TOKEN)
     if not atteso:
         return JSONResponse({"errore": "SCHEDULER_TOKEN non configurato"}, status_code=503)
-    fornito = (request.headers.get("X-Scheduler-Token") or token or "").strip()
+    fornito = _pulisci_token(request.headers.get("X-Scheduler-Token") or token)
     if not secrets.compare_digest(fornito, atteso):
         return JSONResponse({"errore": "token non valido"}, status_code=403)
     return JSONResponse(scheduler.tick())
