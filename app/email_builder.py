@@ -15,10 +15,12 @@ LINK = "https://schoenbech.com/attivita-consulenza-overview.pdf"
 
 # Esempio reale di mappatura (ricerca Responsabile Pricing, dati anonimizzati).
 # Finché è vuoto, mailer.run_send/do_test bloccano l'invio delle email che lo citano.
-# Link aperto (riutilizzabile, sola lettura) al progetto /progetti/6 di Talent Mapping.
+# Pagina pubblica "Esempi di analisi": il destinatario sceglie il caso che lo
+# riguarda. Sostituisce i link diretti al singolo progetto, che scadevano a ogni
+# cambio del sito senza che il testo se ne accorgesse.
 LINK_MAPPATURA = os.getenv(
     "LINK_MAPPATURA",
-    "https://businessintelligence.schoenbech.com/accesso/1u3i1QKs5T7ivJph_uAHbqBMIkuoCa-m",
+    "https://schoenbech.com/aree-di-lavoro",
 ).strip()
 
 _STATIC_LOGO = Path(__file__).resolve().parent.parent / "static" / "logo_email.png"
@@ -34,7 +36,7 @@ CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro:
 
 Oltre ai candidati, l’azienda dispone così di **informazioni concrete** su come altre realtà organizzano ruoli analoghi, **sui livelli retributivi** e sulle condizioni che favoriscono o frenano un cambiamento. La mappatura è consultabile in un’area riservata e viene aggiornata durante la ricerca: aiuta a valutare la competitività dell’offerta e a capire se occorre rivedere alcuni requisiti del profilo.
 
-Qui può consultare {LINK_MAPPATURA|un esempio reale di mappatura}, relativo alla ricerca di un **Responsabile Pricing**, con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione.
+Qui può consultare {LINK_MAPPATURA|due esempi reali di analisi} — una mappatura di mercato e competenze, e un benchmarking di ruoli e organizzazione — con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione.
 
 Seguo personalmente ogni fase dell’incarico, con **una struttura snella che permette di contenere i costi** e mantenere un rapporto diretto durante tutto il lavoro.
 
