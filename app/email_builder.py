@@ -26,7 +26,7 @@ LINK = "https://schoenbech.com/attivita-consulenza-overview.pdf"
 # Finché è vuoto, mailer.run_send/do_test bloccano l'invio delle email che lo citano.
 LINK_MAPPATURA = os.getenv(
     "LINK_MAPPATURA",
-    "https://schoenbech.com/aree-di-lavoro",
+    "https://schoenbech.com/aree-di-lavoro#:~:text=in%20quel%20mercato%3F-,Esempi%20di%20analisi,-Due%20casi%20reali",
 ).strip()
 
 _STATIC_LOGO = Path(__file__).resolve().parent.parent / "static" / "logo_email.png"
