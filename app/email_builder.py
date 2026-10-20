@@ -13,11 +13,17 @@ except Exception:  # pragma: no cover
 
 LINK = "https://schoenbech.com/attivita-consulenza-overview.pdf"
 
-# Esempio reale di mappatura (ricerca Responsabile Pricing, dati anonimizzati).
+# Pagina pubblica "Esempi di analisi": il destinatario sceglie da se' il caso
+# che lo riguarda.
+#
+# Sostituisce i link di accesso generati dalla piattaforma Business Intelligence
+# (businessintelligence.schoenbech.com/accesso/<token>). Quelli scadono per conto
+# loro e, una volta scaduti, rispondono 200 con una pagina "Il link non e' valido
+# o e' scaduto": un controllo sul codice di stato NON li distingue da un link
+# sano. Nelle email servono indirizzi senza scadenza, perche' il testo resta in
+# circolo per settimane e il recall lo riallega sotto il messaggio originale.
+#
 # Finché è vuoto, mailer.run_send/do_test bloccano l'invio delle email che lo citano.
-# Pagina pubblica "Esempi di analisi": il destinatario sceglie il caso che lo
-# riguarda. Sostituisce i link diretti al singolo progetto, che scadevano a ogni
-# cambio del sito senza che il testo se ne accorgesse.
 LINK_MAPPATURA = os.getenv(
     "LINK_MAPPATURA",
     "https://schoenbech.com/aree-di-lavoro",
