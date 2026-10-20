@@ -29,6 +29,48 @@ Doppio clic su `C:\Users\Luca R\Desktop\OUTREACH_MASSIVO.bat`
 - Cloud SQL via socket (`--add-cloudsql-instances`), secret da Secret Manager
 - Re-deploy: `deploy_cloud_run.bat`
 
+## Invio programmato (anche a computer spento)
+
+Su Cloud Run il servizio viene spento quando nessuno lo usa (`--min-instances 0`,
+`--cpu-throttling`), quindi un invio lungo in un processo di sfondo non
+arriverebbe in fondo. L'invio programmato e' guidato dall'esterno: **Cloud
+Scheduler chiama `/scheduler/tick` ogni due minuti dentro la finestra oraria, e
+ogni chiamata spedisce al piu' una email**. Il ritmo umano resta quello
+configurato (`DELAY_MIN`..`DELAY_MAX`, pausa ogni `PAUSE_EVERY`): l'attesa e'
+custodita nella tabella `scheduler_state` invece che in un `sleep`.
+
+Dalla pagina Invio o Richiami della campagna si preme *Programma invii/richiami
+automatici*. Si puo' fare la sera per il mattino dopo. Quando non restano righe
+da inviare il flag si spegne da solo.
+
+### Impostazione, una volta sola
+
+```bat
+REM 1) un segreto lungo e casuale, condiviso fra servizio e scheduler
+powershell -Command "[guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')" > token.txt
+gcloud secrets create OUTREACH_SCHEDULER_TOKEN --data-file=token.txt
+del token.txt
+
+REM 2) pubblica il servizio, che ora riceve il segreto
+deploy_cloud_run.bat
+
+REM 3) il lavoro programmato: ogni 2 minuti, 09:25-12:00, ora italiana
+gcloud scheduler jobs create http outreach-tick ^
+  --location europe-west1 ^
+  --schedule "*/2 9-11 * * 1-5" ^
+  --time-zone "Europe/Rome" ^
+  --uri "https://outreach-massivo-998063536756.europe-west1.run.app/scheduler/tick" ^
+  --http-method POST ^
+  --update-headers "X-Scheduler-Token=IL_TUO_SEGRETO"
+```
+
+Cloud Scheduler offre 3 lavori gratuiti al mese e il servizio si sveglia solo
+per quelle chiamate, che durano meno di un secondo quando non c'e' nulla da
+spedire.
+
+Senza `SCHEDULER_TOKEN` configurato l'indirizzo risponde 503 e non spedisce
+nulla: e' chiuso per difetto.
+
 ## Stato
 - [x] Connessione DB + schema `mass`
 - [x] Login, campagne, import, bozze, anteprima

@@ -57,6 +57,10 @@ DAILY_LIMIT = _get_int("DAILY_LIMIT", 100)
 # Motore di invio automatico: "on" (app locale) / "off" (cloud: prepara solo)
 AUTOSEND = _get("AUTOSEND", "on").strip().lower() != "off"
 
+# Avvio programmato dall'esterno (Cloud Scheduler): senza questo valore
+# l'indirizzo /scheduler/tick rifiuta qualunque chiamata.
+SCHEDULER_TOKEN = _get("SCHEDULER_TOKEN")
+
 # Scansione risposte: quanti giorni di posta in arrivo guardare
 REPLY_SCAN_DAYS = _get_int("REPLY_SCAN_DAYS", 30)
 

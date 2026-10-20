@@ -63,6 +63,7 @@ def init_db():
         ("outreach_message", ("contesto TEXT", "gancio TEXT", "message_id_header TEXT")),
         ("contact", ("risposto_at TIMESTAMPTZ", "risposta_oggetto TEXT",
                      "risposta_da TEXT")),
+        ("campaign", ("auto_recall BOOLEAN NOT NULL DEFAULT FALSE",)),
     ):
         for colonna in colonne:
             try:

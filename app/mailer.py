@@ -312,8 +312,13 @@ def do_test(rows, channel, message_no=1):
         return f"Errore TEST: {e}"
 
 
-def send_singolo(row, channel, salva_copia=True):
-    """Invia subito UNA singola email al destinatario (dalla pagina anteprima)."""
+def send_singolo(row, channel, salva_copia=True, message_no=1):
+    """Invia subito UNA singola email al destinatario.
+
+    Usata dalla pagina anteprima (message_no=1) e dallo scheduler esterno, che
+    su Cloud Run spedisce una email per chiamata invece di tenere aperto un
+    invio lungo (vedi app/scheduler.py).
+    """
     mancanti = link_mancanti(get_email_template())
     if mancanti:
         return f"Invio bloccato: link non configurato ({', '.join(mancanti)})."
@@ -321,13 +326,13 @@ def send_singolo(row, channel, salva_copia=True):
     try:
         smtp = smtplib.SMTP_SSL(ch["server"], ch["port"], timeout=30)
         smtp.login(ch["user"], ch["password"])
-        msg = build_message(row, ch["user"], message_no=1)
+        msg = build_message(row, ch["user"], message_no=message_no)
         smtp.send_message(msg)
         smtp.quit()
     except Exception as e:
-        _persist(row, 1, channel, "", False, str(e))
+        _persist(row, message_no, channel, "", False, str(e))
         return f"Errore invio: {e}"
-    _persist(row, 1, channel, str(msg["Subject"]), True, message_id=msg["Message-ID"])
+    _persist(row, message_no, channel, str(msg["Subject"]), True, message_id=msg["Message-ID"])
     copia_err = ""
     if salva_copia:
         try:
