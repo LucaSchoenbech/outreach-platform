@@ -6,6 +6,7 @@ dedicato: NON tocca le tabelle dell'app esistente.
 """
 import io
 import re
+import secrets
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -17,9 +18,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSON
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
-from app import ai, learning, mailer, models, replies
-from app.config import (APP_HOST, APP_PORT, AUTOSEND, DAILY_LIMIT, SEND_WINDOW_END,
-                        SEND_WINDOW_START)
+from app import ai, learning, mailer, models, replies, scheduler
+from app.config import (APP_HOST, APP_PORT, AUTOSEND, DAILY_LIMIT, SCHEDULER_TOKEN,
+                        SEND_WINDOW_END, SEND_WINDOW_START)
 from app.db import SessionLocal, init_db
 from app.email_builder import (
     LINK, LOGO, SUBJECT, build_apertura, build_email, build_email_html, build_saluto,
@@ -981,7 +982,7 @@ def invio_page(request: Request, cid: str, user=Depends(require_user)):
     return templates.TemplateResponse(request, "invio.html", {
         "camp": camp, "rows": rows, "tot": len(rows), "bloccati": bloccati,
         "state": mailer.STATE, "mode": "invio", "user": user,
-        "auto_send": camp.auto_send, "inviate_oggi": mailer.inviate_oggi(),
+        "auto_send": camp.auto_send, "auto_recall": camp.auto_recall, "inviate_oggi": mailer.inviate_oggi(),
         "nella_finestra": mailer.nella_finestra(), "daily_limit": DAILY_LIMIT,
         "win_start": SEND_WINDOW_START, "win_end": SEND_WINDOW_END,
     })
@@ -1000,7 +1001,7 @@ def recall_page(request: Request, cid: str, user=Depends(require_user)):
     return templates.TemplateResponse(request, "invio.html", {
         "camp": camp, "rows": rows, "tot": len(rows), "bloccati": [],
         "state": mailer.STATE, "mode": "recall", "user": user,
-        "auto_send": camp.auto_send, "inviate_oggi": mailer.inviate_oggi(),
+        "auto_send": camp.auto_send, "auto_recall": camp.auto_recall, "inviate_oggi": mailer.inviate_oggi(),
         "nella_finestra": mailer.nella_finestra(), "daily_limit": DAILY_LIMIT,
         "win_start": SEND_WINDOW_START, "win_end": SEND_WINDOW_END,
     })
@@ -1043,17 +1044,45 @@ def invio_start(cid: str = Form(""), mode: str = Form("invio"), channel: str = F
 
 
 @app.post("/campaign/{cid}/auto-send")
-def auto_send_toggle(cid: str, attiva: str = Form("1"), back: str = Form("/"),
-                     user=Depends(require_user)):
+def auto_send_toggle(cid: str, attiva: str = Form("1"), mode: str = Form("invio"),
+                     back: str = Form("/"), user=Depends(require_user)):
     db = SessionLocal()
     try:
         camp = db.get(models.Campaign, cid)
         if camp:
-            camp.auto_send = (attiva == "1")
+            if mode == "recall":
+                camp.auto_recall = (attiva == "1")
+            else:
+                camp.auto_send = (attiva == "1")
             db.commit()
     finally:
         db.close()
     return RedirectResponse(back or f"/campaign/{cid}", status_code=303)
+
+
+# ---------------------------------------------------------------------------
+# Avvio programmato dall'esterno (Cloud Scheduler)
+# ---------------------------------------------------------------------------
+@app.post("/scheduler/tick")
+def scheduler_tick(request: Request, token: str = ""):
+    """Un colpo di scheduler: al piu' una email, poi torna subito.
+
+    Non usa il cookie di sessione, perche' chi chiama e' Cloud Scheduler e non
+    un browser: si autentica con SCHEDULER_TOKEN, nell'intestazione
+    X-Scheduler-Token oppure in ?token=. Senza token configurato, chiuso.
+    """
+    atteso = (SCHEDULER_TOKEN or "").strip()
+    if not atteso:
+        return JSONResponse({"errore": "SCHEDULER_TOKEN non configurato"}, status_code=503)
+    fornito = (request.headers.get("X-Scheduler-Token") or token or "").strip()
+    if not secrets.compare_digest(fornito, atteso):
+        return JSONResponse({"errore": "token non valido"}, status_code=403)
+    return JSONResponse(scheduler.tick())
+
+
+@app.get("/scheduler/stato")
+def scheduler_stato(user=Depends(require_user)):
+    return JSONResponse(scheduler.stato_pubblico())
 
 
 @app.post("/invio/stop")

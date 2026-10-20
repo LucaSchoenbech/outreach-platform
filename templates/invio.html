@@ -72,25 +72,29 @@
       oggi inviate: <b>{{ inviate_oggi }}</b>/{{ daily_limit }} ·
       {% if nella_finestra %}<span style="color:var(--ok)">adesso dentro la finestra</span>{% else %}<span style="color:#b00">adesso fuori finestra</span>{% endif %}.
     </p>
-    {% if mode == 'invio' %}
-      {% if auto_send %}
-        <div class="row" style="gap:10px;align-items:center">
-          <span class="tag Pronta">Invio automatico attivo</span>
-          <form method="post" action="/campaign/{{ camp.campaign_id }}/auto-send">
-            <input type="hidden" name="attiva" value="0">
-            <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}/invio">
-            <button class="btn gray" type="submit">Disattiva</button>
-          </form>
-        </div>
-        <div class="hint" style="margin-top:8px">L'invio parte da solo appena è dentro la finestra e riprende nei giorni successivi, finché ci sono contatti Pronti (max {{ daily_limit }}/giorno).</div>
-      {% else %}
-        <form method="post" action="/campaign/{{ camp.campaign_id }}/auto-send" class="row" style="gap:10px">
-          <input type="hidden" name="attiva" value="1">
-          <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}/invio">
-          <button class="btn" type="submit">Programma invio automatico</button>
-          <span class="muted">Parte da solo dentro la finestra ({{ win_start }}–{{ win_end }}), max {{ daily_limit }}/giorno; riprende nei giorni successivi finché ci sono contatti Pronti.</span>
+    {% set attivo = auto_recall if mode == 'recall' else auto_send %}
+    {% set etichetta = 'richiami' if mode == 'recall' else 'invii' %}
+    {% if attivo %}
+      <div class="row" style="gap:10px;align-items:center">
+        <span class="tag Pronta">{{ etichetta|capitalize }} automatici attivi</span>
+        <form method="post" action="/campaign/{{ camp.campaign_id }}/auto-send">
+          <input type="hidden" name="attiva" value="0">
+          <input type="hidden" name="mode" value="{{ mode }}">
+          <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}/{{ mode }}">
+          <button class="btn gray" type="submit">Disattiva</button>
         </form>
-      {% endif %}
+      </div>
+      <div class="hint" style="margin-top:8px">Partono da soli alla prossima finestra ({{ win_start }}–{{ win_end }}),
+      anche a computer spento, max {{ daily_limit }}/giorno. Riprendono nei giorni successivi finché restano contatti.</div>
+    {% else %}
+      <form method="post" action="/campaign/{{ camp.campaign_id }}/auto-send" class="row" style="gap:10px">
+        <input type="hidden" name="attiva" value="1">
+        <input type="hidden" name="mode" value="{{ mode }}">
+        <input type="hidden" name="back" value="/campaign/{{ camp.campaign_id }}/{{ mode }}">
+        <button class="btn" type="submit">Programma {{ etichetta }} automatici</button>
+        <span class="muted">Puoi programmare adesso per domani: partono da soli all'apertura della finestra
+        ({{ win_start }}–{{ win_end }}), max {{ daily_limit }}/giorno.</span>
+      </form>
     {% endif %}
   </div>
 
