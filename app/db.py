@@ -71,18 +71,19 @@ def init_db():
                                       f"ADD COLUMN IF NOT EXISTS {colonna}"))
             except Exception:
                 pass
-    # Bonifica una tantum: il testo salvato da /testo puo' contenere un link di
-    # accesso a scadenza scritto per esteso. Diventa il segnaposto, cosi' la
-    # pagina mostra la stessa cosa che viene spedita e l'indirizzo ha una sola
-    # fonte. Idempotente: a regime non trova piu' nulla da cambiare.
+    # Bonifica una tantum del testo salvato da /testo: indirizzi a scadenza ->
+    # segnaposto, e paragrafo che promette un solo esempio -> i due casi della
+    # pagina pubblica. Cosi' la modifica vale su TUTTE le email, comprese
+    # quelle che usano un testo salvato mesi fa, senza doverlo riscrivere a
+    # mano. Idempotente: a regime non trova piu' nulla da cambiare.
     try:
         from app import models
-        from app.email_builder import normalizza_link
+        from app.email_builder import normalizza_testo
         with Session(engine) as ses:
             row = ses.get(models.EmailTemplate, 1)
             if row:
-                nuovo_corpo = normalizza_link(row.corpo)
-                nuovo_recall = normalizza_link(row.recall_text)
+                nuovo_corpo = normalizza_testo(row.corpo)
+                nuovo_recall = normalizza_testo(row.recall_text)
                 if nuovo_corpo != row.corpo or nuovo_recall != row.recall_text:
                     row.corpo, row.recall_text = nuovo_corpo, nuovo_recall
                     ses.commit()
