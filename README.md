@@ -45,6 +45,10 @@ da inviare il flag si spegne da solo.
 
 ### Impostazione, una volta sola
 
+I comandi qui sotto sono nella forma del Prompt dei comandi, dove `^` spezza
+le righe. **In PowerShell quel carattere non funziona**: incolla ogni comando
+su una riga sola, oppure usa l'apice inverso al posto di `^`.
+
 ```bat
 REM 1) un segreto lungo e casuale, condiviso fra servizio e scheduler
 powershell -Command "[guid]::NewGuid().ToString('N') + [guid]::NewGuid().ToString('N')" > token.txt
@@ -61,7 +65,7 @@ gcloud scheduler jobs create http outreach-tick ^
   --time-zone "Europe/Rome" ^
   --uri "https://outreach-massivo-998063536756.europe-west1.run.app/scheduler/tick" ^
   --http-method POST ^
-  --update-headers "X-Scheduler-Token=IL_TUO_SEGRETO"
+  --headers "X-Scheduler-Token=IL_TUO_SEGRETO"
 ```
 
 Cloud Scheduler offre 3 lavori gratuiti al mese e il servizio si sveglia solo
