@@ -212,6 +212,43 @@ def normalizza_link(testo):
     return _URL_SCADENTI.sub("{LINK_MAPPATURA}", str(testo))
 
 
+# Il paragrafo storico prometteva UN solo caso ("un esempio reale di mappatura,
+# relativo alla ricerca di un Responsabile Pricing"). La pagina pubblica ne
+# offre due, quindi va sostituito ovunque, anche nei testi gia' salvati da
+# /testo: altrimenti l'email continua a promettere il caso singolo mentre il
+# link porta alla pagina con entrambi.
+PARAGRAFO_ESEMPI = (
+    "Qui può consultare {LINK_MAPPATURA|due esempi reali di analisi} \u2014 una "
+    "mappatura di mercato e competenze, e un benchmarking di ruoli e "
+    "organizzazione \u2014 con i dati anonimizzati a tutela del cliente e dei "
+    "professionisti coinvolti. L\u2019accesso è diretto, senza registrazione."
+)
+
+# Tracce del vecchio paragrafo. Si interviene solo su un paragrafo che cita il
+# segnaposto E una di queste: un paragrafo riscritto da te non viene toccato.
+_TRACCE_VECCHIE = re.compile(r"Responsabile Pricing|esempio reale di mappatura", re.I)
+
+
+def aggiorna_paragrafo_esempi(testo):
+    """Sostituisce il paragrafo che promette un solo esempio di mappatura.
+
+    Lavora per paragrafi (separati da riga vuota) e conserva il resto del
+    testo come sta, separatori compresi.
+    """
+    if not testo:
+        return testo
+    parti = re.split(r"(\n\s*\n)", str(testo))
+    for i, par in enumerate(parti):
+        if "LINK_MAPPATURA" in par and _TRACCE_VECCHIE.search(par):
+            parti[i] = PARAGRAFO_ESEMPI
+    return "".join(parti)
+
+
+def normalizza_testo(testo):
+    """Tutte le correzioni strutturali sul testo di un'email, in un punto solo."""
+    return aggiorna_paragrafo_esempi(normalizza_link(testo))
+
+
 def get_email_template():
     """Testo generale (oggetto, corpo, recall) da DB, con default di fabbrica.
 
@@ -236,8 +273,8 @@ def get_email_template():
             db.close()
     except Exception:
         pass
-    tpl["corpo"] = normalizza_link(tpl["corpo"])
-    tpl["recall_text"] = normalizza_link(tpl["recall_text"])
+    tpl["corpo"] = normalizza_testo(tpl["corpo"])
+    tpl["recall_text"] = normalizza_testo(tpl["recall_text"])
     return tpl
 
 
