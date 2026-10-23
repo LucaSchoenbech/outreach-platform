@@ -21,9 +21,8 @@ from app import config
 from app.email_builder import dividi_nome
 from app.main import parse_uploaded
 
-URL = os.environ.get(
-    "OUTREACH_URL",
-    "https://outreach-massivo-998063536756.europe-west1.run.app").rstrip("/")
+# App LOCALE (stessa base dati del cloud): l'AI in background non viene interrotta.
+URL = os.environ.get("OUTREACH_URL", "http://127.0.0.1:8788").rstrip("/")
 CAMPAGNA = os.environ.get("OUTREACH_CAMPAGNA", "Da rivedere")
 AUTO_AI = os.environ.get("OUTREACH_AUTO_AI", "1") != "0"
 BATCH = 20
