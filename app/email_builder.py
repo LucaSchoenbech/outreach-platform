@@ -36,7 +36,7 @@ LINK_SAMPLE_TECNICO = os.getenv(
 ).strip()
 LINK_SAMPLE_PRICING = os.getenv(
     "LINK_SAMPLE_PRICING",
-    "https://businessintelligence.schoenbech.com/accesso/phX3CfzR3RpqdWX1zwtuR_VBnzH2y9Wy",
+    "https://businessintelligence.schoenbech.com/accesso/znZBQnsnMU-x7c8IhkVIWttXKIA3iNk-",
 ).strip()
 
 _STATIC_LOGO = Path(__file__).resolve().parent.parent / "static" / "logo_email.png"
