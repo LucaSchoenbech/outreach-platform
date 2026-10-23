@@ -51,7 +51,7 @@ CORPO = """Quello che faccio è leggere quei mercati da fuori. In pratica: dove 
 
 Dove serve, la ricerca di una persona è uno degli esiti possibili, non il presupposto.
 
-Due esempi reali — una mappatura di mercato e competenze e un benchmarking di ruoli e organizzazione — sono consultabili su {LINK_MAPPATURA|schoenbech.com/aree-di-lavoro}. Dati anonimizzati a tutela del cliente e dei professionisti coinvolti, accesso diretto senza registrazione.
+Due esempi reali sono consultabili su {LINK_MAPPATURA|schoenbech.com/aree-di-lavoro}: le mappature di un {LINK_TECNICO|Tecnico Area Professional} e di un {LINK_PRICING|Responsabile Pricing} — dove si trovano le competenze, come sono organizzate le funzioni in aziende comparabili, quali riferimenti retributivi emergono. Dati anonimizzati a tutela del cliente e dei professionisti coinvolti, accesso diretto senza registrazione.
 
 Se c’è una funzione su cui il mercato vi sembra più stretto del previsto, o una struttura che vi domandate come sia organizzata altrove, da lì si può partire. Le propongo una call breve, quando Le è comodo."""
 
@@ -239,12 +239,12 @@ def normalizza_link(testo):
 # /testo: altrimenti l'email continua a promettere il caso singolo mentre il
 # link porta alla pagina con entrambi.
 PARAGRAFO_ESEMPI = (
-    "Qui può consultare {LINK_MAPPATURA|due esempi reali di analisi} \u2014 una "
-    "mappatura di mercato e competenze, e un benchmarking di ruoli e "
-    "organizzazione \u2014 con i dati anonimizzati a tutela del cliente e dei "
-    "professionisti coinvolti. L\u2019accesso è diretto, senza registrazione. "
-    "Link diretti ai due casi: {LINK_TECNICO|Tecnico Area Professional} e "
-    "{LINK_PRICING|Responsabile Pricing}."
+    "Due esempi reali sono consultabili su {LINK_MAPPATURA|schoenbech.com/aree-di-lavoro}: "
+    "le mappature di un {LINK_TECNICO|Tecnico Area Professional} e di un "
+    "{LINK_PRICING|Responsabile Pricing} \u2014 dove si trovano le competenze, come sono "
+    "organizzate le funzioni in aziende comparabili, quali riferimenti retributivi "
+    "emergono. Dati anonimizzati a tutela del cliente e dei professionisti coinvolti, "
+    "accesso diretto senza registrazione."
 )
 
 # Tracce del vecchio paragrafo. Si interviene solo su un paragrafo che cita il
