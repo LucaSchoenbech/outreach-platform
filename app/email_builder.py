@@ -29,6 +29,16 @@ LINK_MAPPATURA = os.getenv(
     "https://schoenbech.com/aree-di-lavoro#:~:text=in%20quel%20mercato%3F-,Esempi%20di%20analisi,-Due%20casi%20reali",
 ).strip()
 
+# Esempi diretti (link aperti) citati nell'email
+LINK_SAMPLE_TECNICO = os.getenv(
+    "LINK_SAMPLE_TECNICO",
+    "https://businessintelligence.schoenbech.com/accesso/rQaduNZVYMeBFxZFGm5jQTNgkwkjLWZw",
+).strip()
+LINK_SAMPLE_PRICING = os.getenv(
+    "LINK_SAMPLE_PRICING",
+    "https://businessintelligence.schoenbech.com/accesso/phX3CfzR3RpqdWX1zwtuR_VBnzH2y9Wy",
+).strip()
+
 _STATIC_LOGO = Path(__file__).resolve().parent.parent / "static" / "logo_email.png"
 _WIN_LOGO = Path(r"C:\Users\Luca R\Downloads\sviluppo schoenbech\logo_schoenbech.png")
 LOGO = _STATIC_LOGO if _STATIC_LOGO.exists() else _WIN_LOGO
@@ -42,7 +52,7 @@ CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro:
 
 Oltre ai candidati, l’azienda dispone così di **informazioni concrete** su come altre realtà organizzano ruoli analoghi, **sui livelli retributivi** e sulle condizioni che favoriscono o frenano un cambiamento. La mappatura è consultabile in un’area riservata e viene aggiornata durante la ricerca: aiuta a valutare la competitività dell’offerta e a capire se occorre rivedere alcuni requisiti del profilo.
 
-Qui può consultare {LINK_MAPPATURA|due esempi reali di analisi} — una mappatura di mercato e competenze, e un benchmarking di ruoli e organizzazione — con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione.
+Qui può consultare {LINK_MAPPATURA|due esempi reali di analisi} — una mappatura di mercato e competenze, e un benchmarking di ruoli e organizzazione — con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione. Link diretti ai due casi: {LINK_TECNICO|Tecnico Area Professional} e {LINK_PRICING|Responsabile Pricing}.
 
 Seguo personalmente ogni fase dell’incarico, con **una struttura snella che permette di contenere i costi** e mantenere un rapporto diretto durante tutto il lavoro.
 
@@ -209,7 +219,14 @@ def normalizza_link(testo):
     """
     if not testo:
         return testo
-    return _URL_SCADENTI.sub("{LINK_MAPPATURA}", str(testo))
+    t = str(testo)
+    # I due esempi diretti hanno un segnaposto proprio: non vanno riscritti
+    # come link di mappatura generico.
+    if LINK_SAMPLE_TECNICO:
+        t = t.replace(LINK_SAMPLE_TECNICO, "{LINK_TECNICO}")
+    if LINK_SAMPLE_PRICING:
+        t = t.replace(LINK_SAMPLE_PRICING, "{LINK_PRICING}")
+    return _URL_SCADENTI.sub("{LINK_MAPPATURA}", t)
 
 
 # Il paragrafo storico prometteva UN solo caso ("un esempio reale di mappatura,
@@ -221,12 +238,15 @@ PARAGRAFO_ESEMPI = (
     "Qui può consultare {LINK_MAPPATURA|due esempi reali di analisi} \u2014 una "
     "mappatura di mercato e competenze, e un benchmarking di ruoli e "
     "organizzazione \u2014 con i dati anonimizzati a tutela del cliente e dei "
-    "professionisti coinvolti. L\u2019accesso è diretto, senza registrazione."
+    "professionisti coinvolti. L\u2019accesso è diretto, senza registrazione. "
+    "Link diretti ai due casi: {LINK_TECNICO|Tecnico Area Professional} e "
+    "{LINK_PRICING|Responsabile Pricing}."
 )
 
 # Tracce del vecchio paragrafo. Si interviene solo su un paragrafo che cita il
 # segnaposto E una di queste: un paragrafo riscritto da te non viene toccato.
-_TRACCE_VECCHIE = re.compile(r"Responsabile Pricing|esempio reale di mappatura", re.I)
+_TRACCE_VECCHIE = re.compile(
+    r"Responsabile Pricing|esempio reale di mappatura|due esempi reali di analisi", re.I)
 
 
 def aggiorna_paragrafo_esempi(testo):
@@ -280,19 +300,25 @@ def get_email_template():
 
 # Segnaposto link: {LINK}, {LINK_BREVE}, {LINK_MAPPATURA}, oppure con il testo
 # cliccabile scelto: {LINK|etichetta}, {LINK_MAPPATURA|etichetta}.
-_LINK_RE = re.compile(r"[{](LINK_MAPPATURA|LINK_BREVE|LINK)(?:[|]([^{}]+))?[}]")
+_LINK_RE = re.compile(
+    r"[{](LINK_MAPPATURA|LINK_TECNICO|LINK_PRICING|LINK_BREVE|LINK)(?:[|]([^{}]+))?[}]")
 
 
 def _url(nome):
-    return LINK_MAPPATURA if nome == "LINK_MAPPATURA" else LINK
+    return {"LINK_MAPPATURA": LINK_MAPPATURA, "LINK_TECNICO": LINK_SAMPLE_TECNICO,
+            "LINK_PRICING": LINK_SAMPLE_PRICING}.get(nome, LINK)
 
 
 def link_mancanti(tpl=None):
     """Segnaposto usati nel testo ma senza URL configurato (invio da bloccare)."""
     t = tpl or {}
     testi = " ".join([t.get("corpo") or CORPO, t.get("recall_text") or RECALL_TEXT])
-    usa_mappatura = any(m.group(1) == "LINK_MAPPATURA" for m in _LINK_RE.finditer(testi))
-    return ["LINK_MAPPATURA"] if usa_mappatura and not LINK_MAPPATURA else []
+    mancanti = []
+    for m in _LINK_RE.finditer(testi):
+        nome = m.group(1)
+        if nome not in ("LINK", "LINK_BREVE") and not _url(nome):
+            mancanti.append(nome)
+    return sorted(set(mancanti))
 
 
 def _sostituisci_link_plain(testo):
@@ -377,19 +403,26 @@ LINK_ANCHOR_BREVE = (f'<a href="{LINK}" style="color:#b08d57;font-weight:bold;te
                      "la mia presentazione</a>")
 
 
-def _link_mappatura_html(etichetta="Presentazione Attivit&agrave; di Mappatura"):
-    if not LINK_MAPPATURA:
-        return f"[{etichetta}]"
-    return (f'<a href="{html.escape(LINK_MAPPATURA, quote=True)}" '
-            f'style="color:#b08d57;font-weight:bold;text-decoration:none;">{etichetta}</a>')
+_ETICHETTE_LINK = {"LINK_MAPPATURA": "Presentazione Attivit&agrave; di Mappatura",
+                   "LINK_TECNICO": "Tecnico Area Professional",
+                   "LINK_PRICING": "Responsabile Pricing"}
+
+
+def _link_html(nome, etichetta=None):
+    url = _url(nome)
+    testo = (etichetta or "").strip() or _ETICHETTE_LINK.get(nome, "")
+    if not url:
+        return f"[{testo}]"
+    return (f'<a href="{html.escape(url, quote=True)}" '
+            f'style="color:#b08d57;font-weight:bold;text-decoration:none;">{testo}</a>')
 
 
 def _sostituisci_link_html(testo):
     """Segnaposto -> link dorati (l'etichetta è già escapata insieme al paragrafo)."""
     def sub(m):
         nome, etichetta = m.group(1), m.group(2)
-        if nome == "LINK_MAPPATURA":
-            return _link_mappatura_html(etichetta.strip()) if etichetta else _link_mappatura_html()
+        if nome in ("LINK_MAPPATURA", "LINK_TECNICO", "LINK_PRICING"):
+            return _link_html(nome, etichetta)
         if etichetta:
             return (f'<a href="{LINK}" style="color:#b08d57;font-weight:bold;text-decoration:none;">'
                     f"{etichetta.strip()}</a>")
