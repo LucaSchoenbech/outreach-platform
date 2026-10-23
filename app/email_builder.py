@@ -43,11 +43,11 @@ _STATIC_LOGO = Path(__file__).resolve().parent.parent / "static" / "logo_email.p
 _WIN_LOGO = Path(r"C:\Users\Luca R\Downloads\sviluppo schoenbech\logo_schoenbech.png")
 LOGO = _STATIC_LOGO if _STATIC_LOGO.exists() else _WIN_LOGO
 
-SUBJECT = "Mappatura di mercato e competenze — {SETTORE}"
+SUBJECT = "Mappatura di mercato e competenze — {TECNOLOGIA}"
 
 APERTURA_BASE = "sono Luca Roberto Schoenbech"
 
-CORPO = """Quello che faccio è leggere quei mercati da fuori. In pratica: dove si trovano oggi le competenze che un certo ruolo richiede e in quali aziende; come realtà comparabili organizzano quella funzione, fra riporti, responsabilità e retribuzioni; come una posizione viene letta da chi quel mestiere lo fa già altrove. Nasce dalle conversazioni dirette con i professionisti di quei settori.
+CORPO = """Attraverso filiere diverse di proposito: le stesse competenze su {TECNOLOGIA} pesano in modo diverso {FILIERE_ESEMPIO}, e questo si riconosce solo avendole viste in più contesti. È un punto di osservazione da affiancare a quello che avete dall’interno.
 
 Dove serve, la ricerca di una persona è uno degli esiti possibili, non il presupposto.
 
@@ -178,6 +178,54 @@ def apertura_parti(contesto, gancio):
     return _profili(gancio), _settore(contesto)
 
 
+_ARTICOLI = sorted(("dello ", "della ", "delle ", "degli ", "dei ", "del ", "dell'", "dell\u2019",
+                    "di ", "nei ", "negli ", "nella ", "nel ", "al ", "ai ", "agli ", "alla ",
+                    "allo "), key=len, reverse=True)
+
+
+def _filiere_items(contesto):
+    """Elenco di filiere senza articoli: 'degli imballaggi..., della chimica' -> ['imballaggi...', 'chimica']."""
+    items = []
+    for parte in str(contesto or "").split(","):
+        c = parte.strip().rstrip(".")
+        for p in _ARTICOLI:
+            if c.lower().startswith(p):
+                c = c[len(p):]
+                break
+        if c:
+            items.append(c)
+    return items
+
+
+def _filiere_list(contesto):
+    return ", ".join(_filiere_items(contesto))
+
+
+def _filiere_esempi(contesto):
+    items = _filiere_items(contesto)[:3]
+    if not items:
+        return "a seconda della filiera in cui si applicano"
+    if len(items) == 1:
+        return f"in {items[0]} e in filiere vicine"
+    if len(items) == 2:
+        return f"in {items[0]} o in {items[1]}"
+    return f"in {items[0]}, in {items[1]} o in {items[2]}"
+
+
+def _tecnologia(row):
+    t = str(row.get("tecnologia") or "").strip()
+    return t or settore_breve(row.get("contesto", ""))
+
+
+def _sostituisci_dati(testo, row):
+    t = str(testo)
+    if "{TECNOLOGIA}" in t:
+        t = t.replace("{TECNOLOGIA}", _tecnologia(row))
+    if "{FILIERE_ESEMPIO}" in t:
+        t = t.replace("{FILIERE_ESEMPIO}", _filiere_esempi(row.get("contesto", "")))
+    return t
+
+
 def settore_breve(contesto):
     """Settore in forma corta, per l'oggetto: 'del packaging e converting, ...' -> 'packaging e converting'."""
     c = _settore(contesto)
@@ -192,11 +240,12 @@ def settore_breve(contesto):
 
 
 def build_apertura(contesto, gancio, esc=lambda x: x):
-    """'sono Luca Roberto Schoenbech. Lavoro sui mercati professionali <settore>. Dialogo con <profili>.'"""
-    profili, settore = apertura_parti(contesto, gancio)
+    """'sono Luca Roberto Schoenbech. Lavoro sui mercati professionali dell'industria: <filiere>. Dialogo con <funzioni>.'"""
+    profili, _ = apertura_parti(contesto, gancio)
+    filiere = _filiere_list(contesto)
     frasi = [APERTURA_BASE + "."]
-    if settore:
-        frasi.append(f"Lavoro sui mercati professionali {esc(settore)}.")
+    if filiere:
+        frasi.append(f"Lavoro sui mercati professionali dell'industria: {esc(filiere)}.")
     if profili:
         frasi.append(f"Dialogo con {esc(profili)}.")
     return " ".join(frasi)
@@ -335,21 +384,30 @@ def _sostituisci_link_plain(testo):
 def build_email(row, message_no=1, tpl=None):
     t = tpl or {}
     subject = t.get("subject") or SUBJECT
+    if "{TECNOLOGIA}" in subject:
+        tec = _tecnologia(row)
+        if tec:
+            subject = subject.replace("{TECNOLOGIA}", tec)
+        else:
+            subject = (subject.replace(" \u2014 {TECNOLOGIA}", "")
+                       .replace("{TECNOLOGIA}", "").strip(" \u2014\u2013-"))
     if "{SETTORE}" in subject:
         breve = settore_breve(row.get("contesto", ""))
         if breve:
             subject = subject.replace("{SETTORE}", breve)
         else:
-            subject = subject.replace(" — {SETTORE}", "").replace("{SETTORE}", "").strip(" —\u2013-")
-    corpo = _sostituisci_link_plain(_plain(t.get("corpo") or CORPO))
-    recall = _sostituisci_link_plain(_plain(t.get("recall_text") or RECALL_TEXT))
+            subject = subject.replace(" \u2014 {SETTORE}", "").replace("{SETTORE}", "").strip(" \u2014\u2013-")
+    corpo = _sostituisci_link_plain(_plain(_sostituisci_dati(t.get("corpo") or CORPO, row)))
+    recall = _sostituisci_link_plain(_plain(_sostituisci_dati(t.get("recall_text") or RECALL_TEXT, row)))
     saluto = row.get("saluto", "")
+    appiglio = str(row.get("appiglio") or "").strip()
     # Apertura ricalcolata da contesto/gancio: testo semplice identico all'HTML
     # (paragrafo_apertura salvato all'import resta solo come fallback).
     apertura = _plain(build_apertura(row.get("contesto", ""), row.get("gancio", "")))
     buongiorno = saluto_orario()
     ricordato = row.get("saluto_originale") or buongiorno
-    corpo_orig = f"{apertura}\n\n{corpo}\n\n{CLOSING}\n{FIRMA_NOME}\n\n{PRIVACY}"
+    testa = f"{appiglio}\n\n" if appiglio else ""
+    corpo_orig = f"{testa}{apertura}\n\n{corpo}\n\n{CLOSING}\n{FIRMA_NOME}\n\n{PRIVACY}"
     if message_no == 1:
         return subject, f"{saluto}, {buongiorno},\n\n{corpo_orig}"
     body = (f"{saluto}, {buongiorno},\n\n{recall}\n\n"
@@ -455,11 +513,14 @@ def _corpo_html(corpo):
 def build_email_html(row, logo="/logo.png", message_no=1, tpl=None):
     t = tpl or {}
     intro_p = f'<p style="margin:0 0 20px 0;">{_intro_html(row.get("contesto", ""), row.get("gancio", ""))}</p>'
-    corpo = _corpo_html(t.get("corpo") or CORPO)
+    corpo = _corpo_html(_sostituisci_dati(t.get("corpo") or CORPO, row))
     saluto = str(row.get("saluto", ""))
+    appiglio = str(row.get("appiglio") or "").strip()
+    appiglio_p = (f'<p style="margin:0 0 20px 0;">{html.escape(appiglio)}</p>'
+                  if appiglio else "")
     if message_no == 2:
         ricordato = row.get("saluto_originale") or saluto_orario()
-        recall = (_plain(t.get("recall_text") or RECALL_TEXT)
+        recall = (_sostituisci_dati(_plain(t.get("recall_text") or RECALL_TEXT), row)
                   .replace(chr(10), "<br>"))
         recall = _sostituisci_link_html(recall)
         html = (HTML_TOP
@@ -469,11 +530,11 @@ def build_email_html(row, logo="/logo.png", message_no=1, tpl=None):
                 + '<hr style=\'border:0;border-top:1px solid #ccc;margin:16px 0\'>'
                 + '<p style="margin:0 0 20px 0;"><b>----- MESSAGGIO ORIGINALE -----</b></p>'
                 + f'<p style="margin:0 0 20px 0;">{saluto}, {ricordato},</p>'
-                + intro_p + corpo + HTML_SALUTI + "</div>"
+                + appiglio_p + intro_p + corpo + HTML_SALUTI + "</div>"
                 + HTML_FIRMA
                 + HTML_FOOTER)
     else:
-        html = HTML_TOP + intro_p + corpo + HTML_CHIUSURA + HTML_FIRMA + HTML_FOOTER
+        html = HTML_TOP + appiglio_p + intro_p + corpo + HTML_CHIUSURA + HTML_FIRMA + HTML_FOOTER
     return (html
             .replace("__SALUTO__", saluto)
             .replace("__BUONGIORNO__", saluto_orario())

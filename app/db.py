@@ -56,6 +56,15 @@ def init_db():
                               "ADD COLUMN IF NOT EXISTS auto_send BOOLEAN NOT NULL DEFAULT FALSE"))
     except Exception:
         pass
+    # Migrazione: campi della nuova apertura (tecnologia, appiglio).
+    try:
+        with engine.begin() as conn:
+            conn.execute(text(f'ALTER TABLE "{DB_SCHEMA}".campaign_company '
+                              "ADD COLUMN IF NOT EXISTS tecnologia TEXT"))
+            conn.execute(text(f'ALTER TABLE "{DB_SCHEMA}".campaign_company '
+                              "ADD COLUMN IF NOT EXISTS appiglio TEXT"))
+    except Exception:
+        pass
     # Migrazione: memoria della proposta AI (per riconoscere le correzioni manuali),
     # motivo di esclusione e apertura realmente inviata.
     for tabella, colonne in (

@@ -36,11 +36,17 @@
       <label>Saluto</label>
       <input name="saluto" value="{{ row.saluto }}">
       <div style="height:10px"></div>
-      <label>Settore (dopo "nel settore ...")</label>
-      <input name="contesto" value="{{ row.contesto }}">
+      <label>Tecnologia (oggetto e blocco "filiere")</label>
+      <input name="tecnologia" value="{{ row.tecnologia }}">
       <div style="height:10px"></div>
-      <label>Profili (dopo "ai profili ...")</label>
+      <label>Filiere (dopo "dell'industria: ..." — es. imballaggi in plastica e gomma, chimica, medicale)</label>
+      <textarea name="contesto" rows="2">{{ row.contesto }}</textarea>
+      <div style="height:10px"></div>
+      <label>Funzioni (dopo "Dialogo con ...")</label>
       <textarea name="gancio" rows="3">{{ row.gancio }}</textarea>
+      <div style="height:10px"></div>
+      <label>Appiglio (opzionale, riga dopo il saluto)</label>
+      <input name="appiglio" value="{{ row.appiglio }}">
       <div style="height:12px"></div>
       <label style="display:flex;align-items:center;gap:8px;text-transform:none;font-size:12px;font-weight:600;margin:0">
         <input type="checkbox" name="condividi" value="on" checked>

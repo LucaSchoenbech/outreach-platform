@@ -48,9 +48,12 @@ ALIASES = {
     "Contesto": ["contesto", "settore", "settore prodotto", "settore merceologico",
                  "settore di appartenenza", "ambito", "comparto", "mercato di riferimento",
                  "industry", "sector"],
-    "Gancio": ["gancio", "hook", "aggancio", "appiglio", "spunto", "spunto per l'email",
+    "Gancio": ["gancio", "hook", "aggancio", "spunto", "spunto per l'email",
                "spunto email", "spunto per email", "idea email", "riferimento",
                "riferimento mercato"],
+    "Tecnologia": ["tecnologia", "technology", "processo", "processo produttivo",
+                   "tecnologia di processo"],
+    "Appiglio": ["appiglio", "appigli"],
     "RicercaAttivita": ["attivita", "attivita in italia", "attivita italia", "attivita azienda",
                         "activity", "business", "business in italia", "business italia",
                         "business in italy", "descrizione business", "business description",
@@ -217,6 +220,7 @@ def _parse_sheet(raw):
         rows.append({
             "azienda": az, "contatto": contatto, "email": em,
             "timing": g("Timing"), "flag": normalize_flag(g("Flag")),
+            "tecnologia": g("Tecnologia"), "appiglio": g("Appiglio"),
             "contesto": g("Contesto"), "gancio": g("Gancio"),
             "ricerca_attivita": g("RicercaAttivita"), "ricerca_competenze": g("RicercaCompetenze"),
             "ricerca_segnale": g("RicercaSegnale"), "alert_text": g("AlertText"),
@@ -399,6 +403,10 @@ def import_file(cid: str, file: UploadFile = File(...), user=Depends(require_use
             if r["email"] and con:
                 con.email = r["email"]
                 con.email_normalized = r["email"].lower()
+            if r.get("tecnologia") and not (cc.tecnologia or "").strip():
+                cc.tecnologia = r["tecnologia"]
+            if r.get("appiglio") and not (cc.appiglio or "").strip():
+                cc.appiglio = r["appiglio"]
             if r["contesto"] and not (cc.contesto or "").strip():
                 cc.contesto = r["contesto"]
             if r["gancio"] and not (cc.gancio or "").strip():
@@ -603,7 +611,8 @@ def genera_ai(cid: str, user=Depends(require_user)):
                     "alert": cc.alert_text or "", "timing": cc.timing or ""}
             if ha_attuale:
                 data["versione_attuale"] = {"settore": (cc.contesto or "").strip(),
-                                            "profili": (cc.gancio or "").strip()}
+                                            "profili": (cc.gancio or "").strip(),
+                                            "tecnologia": (cc.tecnologia or "").strip()}
             rows.append({"cc_id": cc.campaign_company_id, "azienda": nome, "data": data,
                          "cutoff": cc.created_at})
     finally:
@@ -642,6 +651,7 @@ def preview(request: Request, cc_id: str, user=Depends(require_user)):
         row = {"azienda": comp.legal_name if comp else "", "saluto": cc.saluto or "",
                "email": con.email if con else "", "contesto": cc.contesto or "",
                "gancio": cc.gancio or "", "flag": cc.flag or "OK", "stato": cc.draft_status,
+               "tecnologia": cc.tecnologia or "", "appiglio": cc.appiglio or "",
                "paragrafo_apertura": cc.paragrafo_apertura or build_apertura(cc.contesto or "", cc.gancio or "")}
         tpl = get_email_template()
         subject, body = build_email(row, 1, tpl)
@@ -659,7 +669,8 @@ def preview_html(cc_id: str, user=Depends(require_user)):
         cc = db.get(models.CampaignCompany, cc_id)
         if not cc:
             return HTMLResponse("<p>Non trovato</p>")
-        row = {"saluto": cc.saluto or "", "contesto": cc.contesto or "", "gancio": cc.gancio or ""}
+        row = {"saluto": cc.saluto or "", "contesto": cc.contesto or "", "gancio": cc.gancio or "",
+               "tecnologia": cc.tecnologia or "", "appiglio": cc.appiglio or ""}
     finally:
         db.close()
     tpl = get_email_template()
@@ -699,6 +710,7 @@ def set_email(cc_id: str, email: str = Form(""), back: str = Form("/"), user=Dep
 
 @app.post("/apertura/{cc_id}")
 def set_apertura(cc_id: str, saluto: str = Form(""), contesto: str = Form(""), gancio: str = Form(""),
+                 tecnologia: str = Form(""), appiglio: str = Form(""),
                  condividi: str = Form(""), back: str = Form("/"), user=Depends(require_user)):
     db = SessionLocal()
     try:
@@ -712,6 +724,8 @@ def set_apertura(cc_id: str, saluto: str = Form(""), contesto: str = Form(""), g
             cc.saluto = saluto.strip()
             cc.contesto = contesto.strip()
             cc.gancio = gancio.strip()
+            cc.tecnologia = tecnologia.strip()
+            cc.appiglio = appiglio.strip()
             cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
             con = db.get(models.Contact, cc.contact_id) if cc.contact_id else None
             em = (con.email if con else "") or ""
@@ -724,6 +738,7 @@ def set_apertura(cc_id: str, saluto: str = Form(""), contesto: str = Form(""), g
                 for altro in fratelli:
                     altro.contesto = cc.contesto
                     altro.gancio = cc.gancio
+                    altro.tecnologia = cc.tecnologia
                     altro.paragrafo_apertura = cc.paragrafo_apertura
                     con2 = db.get(models.Contact, altro.contact_id) if altro.contact_id else None
                     em2 = (con2.email if con2 else "") or ""
@@ -789,6 +804,7 @@ def singola_page(request: Request, user=Depends(require_user)):
 def singola_crea(titolo: str = Form(""), nome: str = Form(""), cognome: str = Form(""),
                  azienda: str = Form(""), email: str = Form(""), ruolo: str = Form(""),
                  info: str = Form(""), competenze: str = Form(""),
+                 tecnologia: str = Form(""), appiglio: str = Form(""),
                  settore: str = Form(""), profili: str = Form(""),
                  user=Depends(require_user)):
     nome, cognome = nome.strip(), cognome.strip()
@@ -822,7 +838,8 @@ def singola_crea(titolo: str = Form(""), nome: str = Form(""), cognome: str = Fo
             if ruolo.strip():
                 con.role = ruolo.strip()
         contesto, gancio = settore.strip(), profili.strip()
-        ai_ctx = ai_gan = ""
+        tecnologia = tecnologia.strip()
+        ai_ctx = ai_gan = ai_tec = ""
         if not (contesto and gancio) and (info.strip() or competenze.strip()):
             try:
                 esempi = learning.blocco_prompt(
@@ -833,8 +850,10 @@ def singola_crea(titolo: str = Form(""), nome: str = Form(""), cognome: str = Fo
                     "segnale": "", "alert": "", "timing": ""}, esempi)
                 ai_ctx = (out.get("contesto") or "").strip()
                 ai_gan = (out.get("gancio") or "").strip()
+                ai_tec = (out.get("tecnologia") or "").strip()
                 contesto = ai_ctx or contesto
                 gancio = ai_gan or gancio
+                tecnologia = ai_tec or tecnologia
             except Exception as e:
                 ai_msg = f" (AI non disponibile: {e})"
         cc = (db.query(models.CampaignCompany)
@@ -847,6 +866,10 @@ def singola_crea(titolo: str = Form(""), nome: str = Form(""), cognome: str = Fo
             cc.contesto = contesto
         if gancio:
             cc.gancio = gancio
+        if tecnologia:
+            cc.tecnologia = tecnologia
+        if appiglio.strip():
+            cc.appiglio = appiglio.strip()
         if ai_ctx or ai_gan:  # tiene la proposta AI per riconoscere le correzioni
             cc.contesto_ai, cc.gancio_ai = ai_ctx, ai_gan
         cc.saluto = build_saluto(f"{nome} {cognome}", titolo=titolo.strip())
@@ -904,6 +927,8 @@ def _row_from_cc(db, cc, camp):
         "azienda": comp.legal_name if comp else "",
         "contesto": cc.contesto or "",
         "gancio": cc.gancio or "",
+        "tecnologia": cc.tecnologia or "",
+        "appiglio": cc.appiglio or "",
         "paragrafo_apertura": cc.paragrafo_apertura or build_apertura(cc.contesto or "", cc.gancio or ""),
     }
 
@@ -1157,8 +1182,10 @@ def _inserisci_contatto(db, camp, d):
     fullname = f"{nome} {cognome}".strip()
     if fullname:
         cc.saluto = build_saluto(fullname, titolo=str(d.get("titolo") or ""))
-    for campo, chiavi in (("contesto", ("contesto", "settore")),
-                          ("gancio", ("gancio", "profili")),
+    for campo, chiavi in (("contesto", ("contesto", "settore", "filiere")),
+                          ("gancio", ("gancio", "profili", "funzioni")),
+                          ("tecnologia", ("tecnologia",)),
+                          ("appiglio", ("appiglio",)),
                           ("timing", ("timing",)),
                           ("ricerca_attivita", ("attivita", "attività")),
                           ("ricerca_competenze", ("competenze",)),
@@ -1240,9 +1267,10 @@ def api_contatti(request: Request, payload: dict = Body(...)):
                         "attivita": cc.ricerca_attivita or "", "competenze": cc.ricerca_competenze or "",
                         "segnale": cc.ricerca_segnale or "", "alert": cc.alert_text or "",
                         "timing": cc.timing or ""}
-                if (cc.contesto or "").strip() or (cc.gancio or "").strip():
+                if (cc.contesto or "").strip() or (cc.gancio or "").strip() or (cc.tecnologia or "").strip():
                     data["versione_attuale"] = {"settore": (cc.contesto or "").strip(),
-                                                "profili": (cc.gancio or "").strip()}
+                                                "profili": (cc.gancio or "").strip(),
+                                                "tecnologia": (cc.tecnologia or "").strip()}
                 rows_ai.append({"cc_id": cc.campaign_company_id,
                                 "azienda": data["azienda"], "data": data})
         finally:

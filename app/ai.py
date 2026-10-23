@@ -27,88 +27,70 @@ class AIError(Exception):
     pass
 
 
-PROMPT = """Sei Luca Roberto Schoenbech, consulente che legge i mercati professionali e fa
-mappature di mercato e competenze. Ricevi i DATI DI RICERCA su un'azienda target e devi
-personalizzare l'apertura di una email di presentazione.
+PROMPT = """Sei Luca Roberto Schoenbech, consulente che legge i mercati professionali
+(attraversando filiere diverse di proposito) e fa mappature di mercato e competenze.
+Ricevi i DATI DI RICERCA su un'azienda target e devi produrre i tre valori che
+personalizzano una email di primo contatto.
 
-FORMULA FISSA (non modificarla, completa solo i due segnaposto):
-"sono Luca Roberto Schoenbech. Lavoro sui mercati professionali <SETTORE>. Dialogo con
-<PROFILI>."
+FORMULA FISSA (non modificarla, produci SOLO i tre valori):
+oggetto: "Mappatura di mercato e competenze — <TECNOLOGIA>"
+apertura: "sono Luca Roberto Schoenbech. Lavoro sui mercati professionali dell'industria:
+<FILIERE>. Dialogo con <FUNZIONI>."
 
-Esempio corretto:
-"Lavoro sui mercati professionali del packaging e converting, con un'attenzione
-particolare a estrusione e stampaggio. Dialogo con responsabili di produzione, process
-engineer e responsabili qualità."
-  -> "contesto": "del packaging e converting, con un'attenzione particolare a estrusione e stampaggio"
-  -> "gancio": "responsabili di produzione, process engineer e responsabili qualità"
+Esempio corretto (azienda di imballaggi in plastica):
+  -> "tecnologia": "estrusione e stampaggio"
+  -> "contesto": "imballaggi in plastica e gomma, chimica, medicale"
+  -> "gancio": "responsabili di produzione, ingegneri di processo, tecnici della qualità"
 
 Rispondi SOLO con un oggetto JSON con questi campi:
-- "contesto" = <SETTORE>: completa "Lavoro sui mercati professionali ...". Inizia con
-  "del ", "della ", "dei ", "delle ", "degli " o "dell'". Descrive il settore e l'attività
-  concreta dell'azienda (prodotti, tecnologie, mercati serviti). Quando i dati lo
-  giustificano, aggiungi un focus tecnologico con ", con un'attenzione particolare a ...".
-  Massimo 24 parole. Niente punto finale.
-- "gancio" = <PROFILI>: completa "Dialogo con ...". Elenco di 2-4 figure professionali
-  concrete e coerenti con quell'azienda (es. "responsabili di produzione, process engineer
-  e responsabili qualità", "specialisti di validazione GMP e technology transfer",
+- "tecnologia": 2-5 parole, la tecnologia o il processo concreto dell'azienda, come compare
+  nei dati (es. "estrusione e stampaggio", "formatura e converting", "produzione sterile").
+  Niente punto finale, niente inglese se esiste il termine italiano.
+- "contesto" = <FILIERE>: elenco di 2-3 filiere separate da virgola, SENZA articoli
+  (es. "imballaggi in plastica e gomma, chimica, medicale"). Scegli SOLO tra questi gruppi:
+  Life Sciences, Healthcare e Medical Devices; chimica, cosmetica e consumer health;
+  industria, automazione e impiantistica; packaging e servizi B2B. MAI settori fuori da
+  questo elenco. Massimo 12 parole.
+- "gancio" = <FUNZIONI>: completa "Dialogo con ...". Elenco di 2-4 figure professionali
+  concrete e coerenti con quell'azienda (es. "responsabili di produzione, ingegneri di
+  processo, tecnici della qualità", "specialisti di validazione GMP e technology transfer",
   "progettisti di stampi e automazione"). Massimo 14 parole. Inizia con un nome/ruolo,
-  NON con "di". Niente verbi, NON ripetere la parola "profili", niente frasi relative
-  ("dove", "in cui"), niente giudizi di scarsità o di mercato, niente punto finale.
-- "tipo_gancio": "Neutro" se i profili sono generici, altrimenti "Visibilità".
+  NON con "di". Niente verbi, non ripetere "profili", niente frasi relative ("dove",
+  "in cui"), niente giudizi di scarsità o di mercato, niente punto finale.
+- "tipo_gancio": "Neutro" se le funzioni sono generiche, altrimenti "Visibilità".
 - "flag": uno tra "OK", "Correzione", "Verifica", "Sensibile".
 
-QUALITÀ (profili concreti e distintivi, non generici):
-- Nei dati di ricerca trovi attività, competenze e spesso una frase "Il gancio è ...":
-  estrai gli elementi distintivi (tecnologie, processi, prodotti, normative, mercati) e
-  trasformali in profili e competenze concrete.
-- VIETATO limitarsi a elenchi generici ("tecnici e manageriali", "produzione e qualità")
-  quando i dati offrono elementi specifici: usali.
-- Se i dati suggeriscono un gancio, i profili devono riprenderne la sostanza tecnica
-  (es. "impianti a ciclo continuo", "refrigeranti naturali", "GMP", "stampi", "customs").
-- CONCISIONE: la frase deve restare scorrevole. 2-3 voci essenziali, non elenchi lunghi
-  o dettagli sovrabbondanti.
-- NIENTE RIPETIZIONI tra settore e profili, nemmeno con parole della stessa famiglia
-  (es. "radiofarmaci"/"radiofarmaceutico", "farmaci"/"farmaceutico"): il termine
-  distintivo va di norma nel settore; nei profili usa concetti diversi.
-- Esempio da NON produrre (ripetitivo e prolisso):
-    settore: "dei radiofarmaci e delle terapie con radioligandi in oncologia"
-    profili: "QA/QC e microbiologia per produzioni sterili, radiochemici e ingegneri di
-    impianto radiofarmaceutico"
-  Versione corretta per gli stessi dati:
-    settore: "dei radiofarmaci e dei radioligandi in oncologia"
-    profili: "specialisti QA/QC e microbiologia per produzioni sterili, radiochemici e
-    ingegneri di impianto"
+QUALITÀ (concreto e distintivo, non generico):
+- Nei dati trovi attività, competenze e spesso una frase "Il gancio è ...": estrai gli
+  elementi distintivi (tecnologie, processi, prodotti, normative) e usali.
+- VIETATO limitarsi a elenchi generici ("tecnici e manageriali") quando i dati offrono
+  elementi specifici.
+- CONCISIONE: 2-3 voci essenziali, frasi scorrevoli.
+- NESSUNA RIPETIZIONE tra tecnologia, filiere e funzioni, nemmeno con parole della stessa
+  famiglia (es. "radiofarmaci"/"radiofarmaceutico", "estrusione"/"estrusori").
 
 REGOLE TASSATIVE:
-- La formula fissa non si cambia: produci SOLO i due segnaposto.
-- Coerenza: i profili devono essere quelli che un'azienda di quel settore cerca
-  davvero (tecnici, produzione, qualità, R&D, regulatory, commerciali, operations...).
-- Il settore non deve ripetere parole dei profili e viceversa (vale anche per parole
-  della stessa famiglia).
-- NON inventare: clienti, incarichi svolti, conoscenza diretta dell'azienda, dati non
-  verificati. Niente numeri, fatturati, acquisizioni, nomi di clienti.
-- Italiano naturale e sobrio, tono professionale senior: niente toni commerciali,
-  superlativi o formule generate automaticamente.
+- Formula fissa: produci SOLO i tre valori.
+- NON inventare: clienti, incarichi, mandati chiusi, numeri, tempi, referenze, settori
+  fuori dall'elenco. Niente prezzi, costi o tariffe.
+- Non usare le parole "recruiter", "head hunting", "ricerca e selezione" riferite al
+  lavoro di Schoenbech.
+- Italiano naturale e sobrio, professionale, senza superlativi né toni commerciali.
 
 GUARDRAIL:
 - Situazione delicata (ammortizzatori sociali, crisi, discontinuità, fermo produzione,
-  ricapitalizzazione) -> profili generici ("tecnici e manageriali"), "tipo_gancio":
+  ricapitalizzazione) -> funzioni generiche ("tecnici e manageriali"), "tipo_gancio":
   "Neutro", "flag": "Sensibile".
-- Timing "BASSO" o con "MONITORARE" -> profili generici, "tipo_gancio": "Neutro".
+- Timing "BASSO" o con "MONITORARE" -> funzioni generiche, "tipo_gancio": "Neutro".
 - Timing con "VERIFICARE" -> "flag": "Verifica".
 - Alert che corregge il settore (errato/troppo stretto/incompleto) -> "flag": "Correzione".
-- Se non ci sono né dati di ricerca né "versione_attuale" -> "gancio": "" e
-  "tipo_gancio": "Neutro".
+- Se non ci sono né dati di ricerca né "versione_attuale" -> tutti i campi vuoti.
 
 VERSIONE ATTUALE (campo "versione_attuale" nei DATI, quando i dati di ricerca sono
 assenti o scarsi):
-- Contiene il settore ("settore") e i profili ("profili") già presenti in bozza.
-- Mantieni la sostanza: stesso settore e profili coerenti con quelli attuali.
-- Proponi SEMPRE una versione leggermente diversa: riordina o riformula i profili e,
-  quando pertinente, integra 1-2 famiglie di profili in più o una breve precisazione
-  sulle competenze. Non ricopiare identica la versione attuale.
-- Obiettivo: una versione leggermente diversa della stessa apertura, senza stravolgere
-  settore e profili.
+- Contiene tecnologia, filiere ("settore") e funzioni ("profili") già presenti in bozza.
+- Mantieni la sostanza e proponi una versione leggermente diversa; puoi integrare 1-2
+  funzioni in più o una precisazione sulle competenze. Non ricopiare identica.
 
 DATI DI RICERCA (JSON):
 """
@@ -249,9 +231,10 @@ def generate_one(cc_id):
                 "attivita": cc.ricerca_attivita or "", "competenze": cc.ricerca_competenze or "",
                 "segnale": cc.ricerca_segnale or "", "alert": cc.alert_text or "",
                 "timing": cc.timing or ""}
-        if (cc.contesto or "").strip() or (cc.gancio or "").strip():
+        if (cc.contesto or "").strip() or (cc.gancio or "").strip() or (cc.tecnologia or "").strip():
             data["versione_attuale"] = {"settore": (cc.contesto or "").strip(),
-                                        "profili": (cc.gancio or "").strip()}
+                                        "profili": (cc.gancio or "").strip(),
+                                        "tecnologia": (cc.tecnologia or "").strip()}
         if not any([data["attivita"], data["competenze"], data["segnale"], data["alert"]]) \
                 and "versione_attuale" not in data:
             return "Nessun dato di ricerca per questo contatto"
@@ -260,6 +243,9 @@ def generate_one(cc_id):
         esempi = learning.blocco_prompt(
             learning.esempi_validi(learning.carica_correzioni(db), cc.created_at))
         out = generate_personalization(data, esempi)
+        nuova_tec = (out.get("tecnologia") or "").strip()
+        if nuova_tec:
+            cc.tecnologia = nuova_tec
         cc.contesto = (out.get("contesto") or "").strip()
         cc.gancio = (out.get("gancio") or "").strip()
         cc.contesto_ai, cc.gancio_ai = cc.contesto, cc.gancio
@@ -311,6 +297,9 @@ def run_generate(rows):
                 break
             cc = db.get(models.CampaignCompany, row["cc_id"])
             if cc:
+                nuova_tec = (out.get("tecnologia") or "").strip()
+                if nuova_tec:
+                    cc.tecnologia = nuova_tec
                 cc.contesto = (out.get("contesto") or "").strip()
                 cc.gancio = (out.get("gancio") or "").strip()
                 cc.contesto_ai, cc.gancio_ai = cc.contesto, cc.gancio

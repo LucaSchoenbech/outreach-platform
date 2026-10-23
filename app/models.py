@@ -94,7 +94,8 @@ class CampaignCompany(Base):
     status: Mapped[str] = mapped_column(Text, default="discovered", nullable=False)
 
     draft_status: Mapped[str] = mapped_column(Text, default="Bozza", nullable=False)  # Bozza|Pronta|Esclusa
-    escluso_motivo: Mapped[str | None] = mapped_column(Text)
+    tecnologia: Mapped[str | None] = mapped_column(Text)
+    appiglio: Mapped[str | None] = mapped_column(Text)
     contesto: Mapped[str | None] = mapped_column(Text)
     gancio: Mapped[str | None] = mapped_column(Text)
     # ultima proposta AI, conservata per riconoscere le correzioni manuali
