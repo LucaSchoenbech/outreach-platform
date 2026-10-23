@@ -1,43 +1,53 @@
 # -*- coding: utf-8 -*-
-"""Sorveglia la cartella Download: appena scarichi un file Lusha, lo importa.
+"""Sorveglia la cartella Download e importa i file Lusha appena compaiono.
 
-Nessuna azione manuale: il file viene letto, normalizzato e inviato all'app
-(con AI automatica). Poi viene spostato in <cartella>/_importati per non
-reimportarlo.
+Nessuna azione manuale: legge, normalizza, invia all'app (AI inclusa) e archivia
+il file in <cartella>/_importati. Gestisce i casi noti:
+- file con nome diverso ma con intestazioni da lista contatti (sniff colonne)
+- file scaricati mentre il watcher era spento (finestra di 24 ore)
+- app locale spenta (prova a riavviarla, con attesa fra i tentativi)
+- file che non si riescono a importare (dopo 5 tentativi -> _da_verificare)
 
 Configurabile da .env o ambiente:
-  OUTREACH_WATCH_DIR       (default: C:\\Users\\<utente>\\Downloads)
-  OUTREACH_WATCH_PATTERN   (default: "lusha" - nome file da riconoscere)
+  OUTREACH_WATCH_DIR       (default: ~/Downloads)
+  OUTREACH_WATCH_PATTERN   (default: "lusha")
+  OUTREACH_WATCH_HOURS     (default: 24 - quanti file recenti guardare)
   OUTREACH_CAMPAGNA        (default: "Da rivedere")
   OUTREACH_AUTO_AI         ("0" per non lanciare l'AI)
-  OUTREACH_URL             (default: servizio cloud)
-I file già presenti all'avvio vengono IGNORATI (solo quelli nuovi).
+  OUTREACH_URL             (default: http://127.0.0.1:8788, app locale)
 """
 import glob
 import os
 import shutil
+import subprocess
 import sys
 import time
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import pandas as pd
 import requests
 from app import config
 from app.email_builder import dividi_nome
 from app.main import parse_uploaded
 
-# App LOCALE (stessa base dati del cloud): l'AI in background qui non viene
-# interrotta dallo spegnimento dell'istanza cloud.
+BASE = os.path.dirname(os.path.abspath(__file__))
 URL = os.environ.get("OUTREACH_URL", "http://127.0.0.1:8788").rstrip("/")
 CAMPAGNA = os.environ.get("OUTREACH_CAMPAGNA", "Da rivedere")
 AUTO_AI = os.environ.get("OUTREACH_AUTO_AI", "1") != "0"
 WATCH_DIR = os.environ.get("OUTREACH_WATCH_DIR", os.path.join(os.path.expanduser("~"), "Downloads"))
 PATTERN = os.environ.get("OUTREACH_WATCH_PATTERN", "lusha").lower()
+try:
+    ORE = float(os.environ.get("OUTREACH_WATCH_HOURS", "24"))
+except ValueError:
+    ORE = 24.0
 DONE_DIR = os.path.join(WATCH_DIR, "_importati")
-LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "lusha_watch.log")
+ERR_DIR = os.path.join(WATCH_DIR, "_da_verificare")
+LOG = os.path.join(BASE, "lusha_watch.log")
 BATCH = 20
-AVVIO = time.time()
+MAX_TENTATIVI = 5
+CREA_NO_WINDOW = 0x08000000
 
 
 def log(msg):
@@ -53,14 +63,49 @@ def log(msg):
         pass
 
 
-def candidati():
+def intestazioni(percorso):
+    try:
+        if percorso.lower().endswith(".csv"):
+            df = pd.read_csv(percorso, nrows=2, header=None, dtype=str,
+                             sep=None, engine="python")
+        else:
+            df = pd.read_excel(percorso, nrows=2, header=None, dtype=str)
+        return [str(x).strip() for x in df.iloc[0].tolist()] if len(df) else []
+    except Exception:
+        return []
+
+
+def sembra_lusha(colonne):
+    c = [str(x).lower() for x in colonne]
+    ha_email = any(("email" in x) or ("e-mail" in x) or (x.strip() == "mail") for x in c)
+    ha_nome_o_azienda = any(("first name" in x) or ("last name" in x) or ("full name" in x)
+                            or ("company" in x) or (x.strip() in ("nome", "cognome", "azienda",
+                                                                  "contatto", "societa"))
+                            for x in c)
+    return ha_email and ha_nome_o_azienda
+
+
+def nuovi_file(sniffati):
     out = []
+    limite = time.time() - ORE * 3600
     for ext in ("*.xlsx", "*.xls", "*.csv"):
-        out.extend(glob.glob(os.path.join(WATCH_DIR, ext)))
-    return [p for p in out
-            if PATTERN in os.path.basename(p).lower()
-            and os.path.isfile(p) and os.path.getsize(p) > 1000
-            and os.path.getmtime(p) >= AVVIO - 5]
+        for p in glob.glob(os.path.join(WATCH_DIR, ext)):
+            try:
+                if not os.path.isfile(p) or os.path.getsize(p) < 1000:
+                    continue
+                if os.path.getmtime(p) < limite:
+                    continue
+                nome = os.path.basename(p).lower()
+                if PATTERN in nome:
+                    out.append(p)
+                    continue
+                if p not in sniffati:
+                    sniffati[p] = sembra_lusha(intestazioni(p))
+                if sniffati[p]:
+                    out.append(p)
+            except OSError:
+                continue
+    return out
 
 
 def importa(percorso, token):
@@ -96,6 +141,17 @@ def importa(percorso, token):
     return salvati, len(righe) - len(contatti)
 
 
+def archivia(percorso, cartella):
+    os.makedirs(cartella, exist_ok=True)
+    nome = datetime.now().strftime("%Y%m%d_%H%M%S_") + os.path.basename(percorso)
+    try:
+        shutil.move(percorso, os.path.join(cartella, nome))
+        return True
+    except Exception as e:
+        log(f"  non archiviato ({e})")
+        return False
+
+
 def main():
     token = (config.SCHEDULER_TOKEN or "").strip()
     if not token:
@@ -105,31 +161,50 @@ def main():
         log(f"ERRORE: cartella non trovata: {WATCH_DIR}")
         return
     os.makedirs(DONE_DIR, exist_ok=True)
-    log(f"Watcher avviato | cartella: {WATCH_DIR} | filtro: '{PATTERN}' | campagna: {CAMPAGNA} | AI: {AUTO_AI}")
-    visti = set()
+    os.makedirs(ERR_DIR, exist_ok=True)
+    log(f"Watcher avviato | cartella: {WATCH_DIR} | nome contiene: '{PATTERN}' (o colonne da lista contatti) | "
+        f"ultime {ORE:g}h | campagna: {CAMPAGNA} | AI: {AUTO_AI}")
+    elaborati = set()
     dimensioni = {}
+    tentativi = {}
+    sniffati = {}
+    ultimo_riavvio = 0.0
     while True:
         try:
-            for p in candidati():
-                if p in visti:
+            for p in nuovi_file(sniffati):
+                if p in elaborati:
                     continue
                 dim = os.path.getsize(p)
                 if dimensioni.get(p) != dim:
                     dimensioni[p] = dim
-                    continue  # file ancora in scrittura: aspetta il giro dopo
+                    continue  # file ancora in scrittura
                 try:
                     salvati, scartati = importa(p, token)
-                except Exception as e:
-                    log(f"ERRORE su {os.path.basename(p)}: {e} (riprovo se il file resta)")
+                except requests.ConnectionError:
+                    if time.time() - ultimo_riavvio > 300:
+                        ultimo_riavvio = time.time()
+                        log("App locale non raggiungibile: provo a riavviarla (proxy + app)...")
+                        try:
+                            subprocess.run(["cmd", "/c", os.path.join(BASE, "avvia_outreach.bat")],
+                                           cwd=BASE, creationflags=CREA_NO_WINDOW, timeout=120)
+                        except Exception as e:
+                            log(f"  riavvio non riuscito: {e}")
                     continue
-                nome = datetime.now().strftime("%Y%m%d_%H%M%S_") + os.path.basename(p)
-                try:
-                    shutil.move(p, os.path.join(DONE_DIR, nome))
                 except Exception as e:
-                    log(f"  importato ma non archiviato ({e})")
+                    tentativi[p] = tentativi.get(p, 0) + 1
+                    log(f"ERRORE su {os.path.basename(p)} (tentativo {tentativi[p]}/{MAX_TENTATIVI}): {e}")
+                    if tentativi[p] >= MAX_TENTATIVI:
+                        archivia(p, ERR_DIR)
+                        log("  spostato in _da_verificare")
+                        elaborati.add(p)
+                    continue
+                colonne = intestazioni(p) if salvati == 0 else []
+                archivia(p, DONE_DIR)
                 log(f"IMPORTATO {os.path.basename(p)}: salvati {salvati}, scartati {scartati}"
                     + (" (AI in background)" if AUTO_AI else ""))
-                visti.add(p)
+                if salvati == 0:
+                    log(f"  ATTENZIONE: nessun contatto valido. Colonne lette: {colonne}")
+                elaborati.add(p)
         except Exception as e:
             log(f"ERRORE nel ciclo: {e}")
         time.sleep(15)
