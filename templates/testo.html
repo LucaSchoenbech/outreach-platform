@@ -32,6 +32,8 @@
     <form method="post" action="/testo">
       <label>Oggetto</label>
       <input name="subject" value="{{ tpl.subject }}">
+      <div class="hint" style="margin-top:4px">Puoi usare <b>{SETTORE}</b>: viene sostituito col settore della singola
+        email (es. "Mappatura di mercato e competenze — packaging e converting").</div>
       <div style="height:12px"></div>
       <label>Corpo comune (dopo la parte personalizzata)</label>
       <textarea name="corpo" rows="9">{{ tpl.corpo }}</textarea>

@@ -43,22 +43,17 @@ _STATIC_LOGO = Path(__file__).resolve().parent.parent / "static" / "logo_email.p
 _WIN_LOGO = Path(r"C:\Users\Luca R\Downloads\sviluppo schoenbech\logo_schoenbech.png")
 LOGO = _STATIC_LOGO if _STATIC_LOGO.exists() else _WIN_LOGO
 
-SUBJECT = "Recruitment As a Service : Schoenbech | Talent Advisory"
+SUBJECT = "Mappatura di mercato e competenze — {SETTORE}"
 
-APERTURA_BASE = ("sono Luca Roberto Schoenbech, **Temporary Recruiter** e Talent Search Advisor. "
-                 "Mi occupo di supporto alla ricerca e valutazione di manager e specialisti senior")
+APERTURA_BASE = "sono Luca Roberto Schoenbech"
 
-CORPO = """Le scrivo per presentarLe un elemento che caratterizza il mio lavoro: ogni ricerca comprende **una mappatura del mercato** costruita attraverso i colloqui diretti con i professionisti contattati.
+CORPO = """Quello che faccio è leggere quei mercati da fuori. In pratica: dove si trovano oggi le competenze che un certo ruolo richiede e in quali aziende; come realtà comparabili organizzano quella funzione, fra riporti, responsabilità e retribuzioni; come una posizione viene letta da chi quel mestiere lo fa già altrove. Nasce dalle conversazioni dirette con i professionisti di quei settori.
 
-Oltre ai candidati, l’azienda dispone così di **informazioni concrete** su come altre realtà organizzano ruoli analoghi, **sui livelli retributivi** e sulle condizioni che favoriscono o frenano un cambiamento. La mappatura è consultabile in un’area riservata e viene aggiornata durante la ricerca: aiuta a valutare la competitività dell’offerta e a capire se occorre rivedere alcuni requisiti del profilo.
+Dove serve, la ricerca di una persona è uno degli esiti possibili, non il presupposto.
 
-Qui può consultare {LINK_MAPPATURA|due esempi reali di analisi} — una mappatura di mercato e competenze, e un benchmarking di ruoli e organizzazione — con i dati anonimizzati a tutela del cliente e dei professionisti coinvolti. L’accesso è diretto, senza registrazione. Link diretti ai due casi: {LINK_TECNICO|Tecnico Area Professional} e {LINK_PRICING|Responsabile Pricing}.
+Due esempi reali — una mappatura di mercato e competenze e un benchmarking di ruoli e organizzazione — sono consultabili su {LINK_MAPPATURA|schoenbech.com/aree-di-lavoro}. Dati anonimizzati a tutela del cliente e dei professionisti coinvolti, accesso diretto senza registrazione.
 
-Seguo personalmente ogni fase dell’incarico, con **una struttura snella che permette di contenere i costi** e mantenere un rapporto diretto durante tutto il lavoro.
-
-Se avete in programma l’inserimento di un responsabile di funzione o di uno specialista senior, sarei lieto di confrontarmi con Lei in una breve chiamata, partendo dalle vostre esigenze.
-
-Per un quadro più generale, trova qui {LINK|una breve presentazione della mia attività}."""
+Se c’è una funzione su cui il mercato vi sembra più stretto del previsto, o una struttura che vi domandate come sia organizzata altrove, da lì si può partire. Le propongo una call breve, quando Le è comodo."""
 
 CLOSING = "Un cordiale saluto,"
 
@@ -183,19 +178,28 @@ def apertura_parti(contesto, gancio):
     return _profili(gancio), _settore(contesto)
 
 
+def settore_breve(contesto):
+    """Settore in forma corta, per l'oggetto: 'del packaging e converting, ...' -> 'packaging e converting'."""
+    c = _settore(contesto)
+    prefissi = sorted(("della ", "dello ", "delle ", "degli ", "dei ", "del ", "dell'",
+                       "dell\u2019", "di ", "nei ", "negli ", "nella ", "nel ", "al ",
+                       "ai ", "agli ", "alla ", "allo "), key=len, reverse=True)
+    for p in prefissi:
+        if c.lower().startswith(p):
+            c = c[len(p):]
+            break
+    return c.split(",")[0].strip()[:60]
+
+
 def build_apertura(contesto, gancio, esc=lambda x: x):
-    """'…senior, con particolare attenzione ai profili <profili> nel settore <settore>.'"""
+    """'sono Luca Roberto Schoenbech. Lavoro sui mercati professionali <settore>. Dialogo con <profili>.'"""
     profili, settore = apertura_parti(contesto, gancio)
-    if profili and settore:
-        coda = (f", con particolare attenzione ai profili di {esc(profili)} "
-                f"(anche) nel settore {esc(settore)}.")
-    elif profili:
-        coda = f", con particolare attenzione ai profili di {esc(profili)}."
-    elif settore:
-        coda = f", con particolare attenzione al settore {esc(settore)}."
-    else:
-        coda = "."
-    return APERTURA_BASE + coda
+    frasi = [APERTURA_BASE + "."]
+    if settore:
+        frasi.append(f"Lavoro sui mercati professionali {esc(settore)}.")
+    if profili:
+        frasi.append(f"Dialogo con {esc(profili)}.")
+    return " ".join(frasi)
 
 
 def _plain(testo):
@@ -331,6 +335,12 @@ def _sostituisci_link_plain(testo):
 def build_email(row, message_no=1, tpl=None):
     t = tpl or {}
     subject = t.get("subject") or SUBJECT
+    if "{SETTORE}" in subject:
+        breve = settore_breve(row.get("contesto", ""))
+        if breve:
+            subject = subject.replace("{SETTORE}", breve)
+        else:
+            subject = subject.replace(" — {SETTORE}", "").replace("{SETTORE}", "").strip(" —\u2013-")
     corpo = _sostituisci_link_plain(_plain(t.get("corpo") or CORPO))
     recall = _sostituisci_link_plain(_plain(t.get("recall_text") or RECALL_TEXT))
     saluto = row.get("saluto", "")
