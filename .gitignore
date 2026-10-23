@@ -6,3 +6,4 @@ __pycache__/
 venv/
 *.log
 tools/*.exe
+lusha_watch.log
