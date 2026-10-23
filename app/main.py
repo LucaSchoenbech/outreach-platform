@@ -13,7 +13,7 @@ from pathlib import Path
 from urllib.parse import quote_plus
 
 import pandas as pd
-from fastapi import FastAPI, Request, Form, File, UploadFile, Depends
+from fastapi import FastAPI, Request, Form, File, UploadFile, Depends, Body
 from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -1093,6 +1093,175 @@ def scheduler_tick(request: Request, token: str = ""):
 @app.get("/scheduler/stato")
 def scheduler_stato(user=Depends(require_user)):
     return JSONResponse(scheduler.stato_pubblico())
+
+
+# ---------------------------------------------------------------------------
+# API contatti (integrazione n8n / Lusha / script esterni)
+# ---------------------------------------------------------------------------
+def _token_automazione_ok(request: Request) -> bool:
+    atteso = _pulisci_token(SCHEDULER_TOKEN)
+    if not atteso:
+        return False
+    fornito = ""
+    for h in ("X-API-Token", "X-Scheduler-Token"):
+        v = request.headers.get(h)
+        if v:
+            fornito = v
+            break
+    if not fornito:
+        fornito = request.query_params.get("token") or ""
+    return secrets.compare_digest(_pulisci_token(fornito), atteso)
+
+
+def _inserisci_contatto(db, camp, d):
+    """Crea/aggiorna azienda+contatto+riga campagna da un dict JSON."""
+    azienda = str(d.get("azienda") or "").strip()
+    nome = str(d.get("nome") or "").strip()
+    cognome = str(d.get("cognome") or "").strip()
+    email = str(d.get("email") or "").strip()
+    if not azienda or not email:
+        return None
+    if not nome and not cognome:
+        nome = str(d.get("contatto") or "").strip()
+    norm = _norm(azienda)
+    comp = db.query(models.Company).filter_by(normalized_name=norm).first()
+    if not comp:
+        comp = models.Company(legal_name=azienda, normalized_name=norm, source="api")
+        db.add(comp)
+        db.flush()
+    con = (db.query(models.Contact)
+           .filter_by(company_id=comp.company_id, email_normalized=email.lower()).first())
+    if not con:
+        con = models.Contact(company_id=comp.company_id, email=email,
+                             email_normalized=email.lower(), first_name=nome,
+                             last_name=cognome, role=str(d.get("ruolo") or ""), source="api")
+        db.add(con)
+        db.flush()
+    else:
+        if nome:
+            con.first_name = nome
+        if cognome:
+            con.last_name = cognome
+        if d.get("ruolo"):
+            con.role = str(d["ruolo"])
+    cc = (db.query(models.CampaignCompany)
+          .filter_by(campaign_id=camp.campaign_id, company_id=comp.company_id)
+          .filter(models.CampaignCompany.contact_id == con.contact_id).first())
+    nuovo = False
+    if not cc:
+        cc = models.CampaignCompany(campaign_id=camp.campaign_id,
+                                    company_id=comp.company_id, contact_id=con.contact_id)
+        db.add(cc)
+        db.flush()
+        nuovo = True
+    fullname = f"{nome} {cognome}".strip()
+    if fullname:
+        cc.saluto = build_saluto(fullname, titolo=str(d.get("titolo") or ""))
+    for campo, chiavi in (("contesto", ("contesto", "settore")),
+                          ("gancio", ("gancio", "profili")),
+                          ("timing", ("timing",)),
+                          ("ricerca_attivita", ("attivita", "attività")),
+                          ("ricerca_competenze", ("competenze",)),
+                          ("ricerca_segnale", ("segnale",)),
+                          ("alert_text", ("alert",))):
+        for k in chiavi:
+            v = d.get(k)
+            if v:
+                setattr(cc, campo, str(v).strip())
+                break
+    cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
+    cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and email) else "Bozza"
+    return cc, nuovo
+
+
+@app.post("/api/contatti")
+def api_contatti(request: Request, payload: dict = Body(...)):
+    """Riceve contatti da automazioni esterne (n8n) e li importa in una campagna.
+
+    Autenticazione: intestazione X-API-Token (oppure X-Scheduler-Token o ?token=).
+    Payload: {"campagna": "nome", "auto_ai": true, "contatti": [{...}]}
+    Campi accettati per contatto: azienda, nome, cognome, email, ruolo, titolo,
+    contesto/settore, gancio/profili, attivita, competenze, segnale, alert, timing.
+    """
+    if not _token_automazione_ok(request):
+        return JSONResponse({"ok": False, "errore": "token non valido"}, status_code=401)
+    campagna = str(payload.get("campagna") or "Da rivedere").strip()
+    auto_ai = bool(payload.get("auto_ai"))
+    if isinstance(payload.get("contatti"), list):
+        righe = payload["contatti"]
+    elif isinstance(payload.get("contatto"), dict):
+        righe = [payload["contatto"]]
+    elif payload.get("azienda"):
+        righe = [payload]
+    else:
+        righe = []
+    if not righe:
+        return JSONResponse({"ok": False, "errore": "nessun contatto nel payload"}, status_code=400)
+
+    db = SessionLocal()
+    creati, scartati = [], 0
+    try:
+        camp = db.query(models.Campaign).filter_by(name=campagna).first()
+        if not camp:
+            camp = models.Campaign(name=campagna, created_by="api")
+            db.add(camp)
+            db.flush()
+        for d in righe:
+            if not isinstance(d, dict):
+                scartati += 1
+                continue
+            try:
+                res = _inserisci_contatto(db, camp, d)
+            except Exception:
+                res = None
+            if not res:
+                scartati += 1
+                continue
+            creati.append(res[0].campaign_company_id)
+        db.commit()
+        ids = [str(x) for x in creati]
+    finally:
+        db.close()
+
+    if auto_ai and ids:
+        db = SessionLocal()
+        try:
+            rows_ai = []
+            for cid in ids:
+                cc = db.get(models.CampaignCompany, cid)
+                if not cc or cc.draft_status != "Bozza":
+                    continue
+                ha_dati = (cc.ricerca_attivita or cc.ricerca_competenze or cc.ricerca_segnale
+                           or cc.alert_text or (cc.contesto or "").strip() or (cc.gancio or "").strip())
+                if not ha_dati:
+                    continue
+                comp = db.get(models.Company, cc.company_id)
+                data = {"azienda": comp.legal_name if comp else "",
+                        "attivita": cc.ricerca_attivita or "", "competenze": cc.ricerca_competenze or "",
+                        "segnale": cc.ricerca_segnale or "", "alert": cc.alert_text or "",
+                        "timing": cc.timing or ""}
+                if (cc.contesto or "").strip() or (cc.gancio or "").strip():
+                    data["versione_attuale"] = {"settore": (cc.contesto or "").strip(),
+                                                "profili": (cc.gancio or "").strip()}
+                rows_ai.append({"cc_id": cc.campaign_company_id,
+                                "azienda": data["azienda"], "data": data})
+        finally:
+            db.close()
+        if rows_ai and not ai.AI_STATE.get("running"):
+            import threading
+            ai.AI_STOP.clear()
+            threading.Thread(target=ai.run_generate, args=(rows_ai,), daemon=True).start()
+
+    return JSONResponse({"ok": True, "campagna": campagna, "ricevuti": len(righe),
+                         "salvati": len(ids), "scartati": scartati, "ids": ids[:50]})
+
+
+@app.get("/api-doc", response_class=HTMLResponse)
+def api_doc(request: Request, user=Depends(require_user)):
+    return templates.TemplateResponse(request, "api_doc.html", {
+        "token": SCHEDULER_TOKEN or "(token non configurato)",
+        "base": str(request.base_url).rstrip("/"),
+    })
 
 
 @app.post("/invio/stop")

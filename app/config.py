@@ -54,8 +54,11 @@ PAUSE_EVERY = _get_int("PAUSE_EVERY", 10)
 SEND_WINDOW_START = _get("SEND_WINDOW_START", "09:30")
 SEND_WINDOW_END = _get("SEND_WINDOW_END", "12:00")
 DAILY_LIMIT = _get_int("DAILY_LIMIT", 100)
-# Motore di invio automatico: "on" (app locale) / "off" (cloud: prepara solo)
-AUTOSEND = _get("AUTOSEND", "on").strip().lower() != "off"
+# Scheduler interno dell'app: "on" / "off".
+# Di norma "off": gli invii automatici li pilota Cloud Scheduler (/scheduler/tick),
+# che resta affidabile anche con istanze a zero. Accenderlo su PIU' istanze
+# contemporaneamente significa doppi invii.
+AUTOSEND = _get("AUTOSEND", "off").strip().lower() == "on"
 
 # Avvio programmato dall'esterno (Cloud Scheduler): senza questo valore
 # l'indirizzo /scheduler/tick rifiuta qualunque chiamata.

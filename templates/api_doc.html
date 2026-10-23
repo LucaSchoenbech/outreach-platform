@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API contatti — Schoenbech Outreach</title>
+<link rel="icon" href="/static/logo_icon.png">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">
+    <img class="brand-icon" src="/static/logo_icon.png" alt="Schoenbech">
+    <img class="brand-full" src="/static/logo_full.png" alt="Schoenbech · Talent Sourcing Advisory">
+  </a>
+  <nav class="nav"><a href="/">Campagne</a><a href="/api-doc">API</a><a href="/logout">Esci</a></nav>
+</header>
+
+<div class="wrap" style="max-width:900px">
+  <div class="card">
+    <h3 style="margin-top:0">API contatti — integrazione n8n / Lusha</h3>
+    <p class="hint">Le automazioni possono inviare contatti già puliti direttamente in una campagna
+      (creata al volo se non esiste), senza passare dal file CSV.</p>
+
+    <label>Endpoint (POST, JSON)</label>
+    <pre class="body">{{ base }}/api/contatti</pre>
+
+    <label>Token (intestazione <b>X-API-Token</b>)</label>
+    <pre class="body">{{ token }}</pre>
+    <p class="hint">Non condividere il token: dà accesso alla scrittura dei contatti.</p>
+
+    <label>Esempio payload</label>
+    <pre class="body">{
+  "campagna": "Da rivedere",
+  "auto_ai": true,
+  "contatti": [
+    {
+      "azienda": "Ferrari",
+      "nome": "Mario",
+      "cognome": "Rossi",
+      "email": "mario.rossi@ferrari.com",
+      "ruolo": "Responsabile Acquisti",
+      "attivita": "Azienda automotive: produzione e sviluppo...",
+      "competenze": "Acquisti, supply chain, qualita fornitori"
+    }
+  ]
+}</pre>
+
+    <p class="hint" style="margin-top:14px">
+      <b>Obbligatori</b>: azienda, email. &nbsp; <b>Facoltativi</b>: nome/cognome (o <i>contatto</i>), ruolo,
+      titolo, contesto/settore, gancio/profili, attivita, competenze, segnale, alert, timing.<br>
+      Con <b>auto_ai: true</b> l'AI dell'app genera settore/profili sulle righe importate (in background,
+      solo se non c'è un'altra generazione in corso).<br>
+      Le righe senza email vengono scartate. Risposta: <code>{"ok": true, "salvati": N, "scartati": M}</code>.
+    </p>
+  </div>
+</div>
+</body>
+</html>
