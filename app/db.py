@@ -68,7 +68,8 @@ def init_db():
     # Migrazione: memoria della proposta AI (per riconoscere le correzioni manuali),
     # motivo di esclusione e apertura realmente inviata.
     for tabella, colonne in (
-        ("campaign_company", ("contesto_ai TEXT", "gancio_ai TEXT", "escluso_motivo TEXT")),
+        ("campaign_company", ("contesto_ai TEXT", "gancio_ai TEXT", "escluso_motivo TEXT",
+                             "qualita_note TEXT", "ai_modello TEXT")),
         ("outreach_message", ("contesto TEXT", "gancio TEXT", "message_id_header TEXT")),
         ("contact", ("risposto_at TIMESTAMPTZ", "risposta_oggetto TEXT",
                      "risposta_da TEXT")),

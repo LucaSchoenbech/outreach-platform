@@ -6,6 +6,7 @@ Provider principale: DeepSeek (API OpenAI-compatibile), modello configurabile
 Rileva l'esaurimento di quota/credito e lo segnala.
 """
 import json
+import re
 import threading
 
 import requests
@@ -13,7 +14,8 @@ import requests
 from app import config
 
 AI_STATE = {"running": False, "total": 0, "done": 0, "current": "", "error": "",
-            "quota": False, "generated": 0, "model": config.DEEPSEEK_MODEL,
+            "quota": False, "generated": 0, "sotto_soglia": 0,
+            "model": config.DEEPSEEK_MODEL,
             "provider": "DeepSeek"}
 AI_LOCK = threading.Lock()
 AI_STOP = threading.Event()
@@ -81,8 +83,8 @@ GUARDRAIL:
 - Situazione delicata (ammortizzatori sociali, crisi, discontinuità, fermo produzione,
   ricapitalizzazione) -> funzioni generiche ("tecnici e manageriali"), "tipo_gancio":
   "Neutro", "flag": "Sensibile".
-- Timing "BASSO" o con "MONITORARE" -> funzioni generiche, "tipo_gancio": "Neutro".
-- Timing con "VERIFICARE" -> "flag": "Verifica".
+- Timing con "VERIFICARE" -> "flag": "Verifica". Il timing NON abbassa mai il livello
+  di dettaglio: un contatto da coltivare merita la stessa cura degli altri.
 - Alert che corregge il settore (errato/troppo stretto/incompleto) -> "flag": "Correzione".
 - Se non ci sono né dati di ricerca né "versione_attuale" -> tutti i campi vuoti.
 
@@ -98,6 +100,86 @@ DATI DI RICERCA (JSON):
 
 def _split(v):
     return [x.strip() for x in (v or "").split(",") if x.strip()]
+
+
+# ---------------------------------------------------------------------------
+# Soglia di qualita'
+# ---------------------------------------------------------------------------
+# Formule che non dicono nulla di quell'azienda: se l'uscita si riduce a
+# queste, l'email vale meno di una non spedita.
+_GENERICHE = re.compile(
+    r"\b(tecnic\w+ e manageriali|figure tecniche|profili tecnici|personale tecnico|"
+    r"ruoli tecnici|tecnici e manager|figure professionali|risorse qualificate)\b", re.I)
+
+# Parola comune ai tre campi = ripetizione. Si ignorano le parole di servizio.
+_VUOTE = {"e", "di", "del", "della", "dei", "delle", "in", "su", "per", "con", "a",
+          "da", "il", "lo", "la", "i", "gli", "le", "un", "una", "dell", "all"}
+
+
+def _parole(testo):
+    return {p for p in re.findall(r"[a-zà-ù]{4,}", (testo or "").lower()) if p not in _VUOTE}
+
+
+def valuta_qualita(out):
+    """Misura l'uscita dell'AI. Ritorna (va_bene, elenco_problemi).
+
+    Una situazione delicata produce di proposito funzioni generiche: li' il
+    generico e' la risposta giusta, non un difetto, e non viene segnalato.
+    """
+    tec = (out.get("tecnologia") or "").strip()
+    filiere = (out.get("contesto") or "").strip()
+    funzioni = (out.get("gancio") or "").strip()
+    if (out.get("flag") or "").strip() == "Sensibile":
+        return True, []
+
+    problemi = []
+    if not tec:
+        problemi.append("tecnologia assente")
+    elif not 1 <= len(tec.split()) <= 6:
+        problemi.append(f"tecnologia di {len(tec.split())} parole")
+    if not filiere:
+        problemi.append("filiere assenti")
+    elif len(_split(filiere)) < 2:
+        problemi.append("una sola filiera")
+    if not funzioni:
+        problemi.append("funzioni assenti")
+    else:
+        voci = len(_split(funzioni))
+        if voci < 2:
+            problemi.append("una sola funzione")
+        if _GENERICHE.search(funzioni):
+            problemi.append("funzioni generiche")
+    comuni = _parole(tec) & _parole(filiere) | _parole(tec) & _parole(funzioni) \
+        | _parole(filiere) & _parole(funzioni)
+    if comuni:
+        problemi.append("ripetizioni fra i campi: " + ", ".join(sorted(comuni)[:3]))
+    return (not problemi), problemi
+
+
+_RICHIAMO = (
+    "\n\nATTENZIONE: la risposta precedente non raggiungeva lo standard richiesto "
+    "({problemi}). Riscrivi usando gli elementi concreti presenti nei dati "
+    "(tecnologie, processi, prodotti, normative). Niente formule generiche.")
+
+
+def genera_con_soglia(data, esempi=""):
+    """Genera e, se l'uscita e' debole, ritenta una volta sola.
+
+    Ritorna (uscita, problemi_residui). Con problemi residui la riga non va
+    promossa a Pronta: resta in Bozza, marcata, cosi' si vede e si rigenera
+    in blocco invece di scoprirla leggendo l'anteprima.
+    """
+    out = generate_personalization(data, esempi)
+    ok, problemi = valuta_qualita(out)
+    if ok:
+        return out, []
+    secondo = generate_personalization(data, esempi + _RICHIAMO.format(
+        problemi="; ".join(problemi)))
+    ok2, problemi2 = valuta_qualita(secondo)
+    if ok2:
+        return secondo, []
+    # Si tiene il tentativo con meno difetti.
+    return (secondo, problemi2) if len(problemi2) <= len(problemi) else (out, problemi)
 
 
 def _call_deepseek(text, system=None):
@@ -242,7 +324,7 @@ def generate_one(cc_id):
         # riga: il lavoro in corso non cambia regole sotto i piedi.
         esempi = learning.blocco_prompt(
             learning.esempi_validi(learning.carica_correzioni(db), cc.created_at))
-        out = generate_personalization(data, esempi)
+        out, problemi = genera_con_soglia(data, esempi)
         nuova_tec = (out.get("tecnologia") or "").strip()
         if nuova_tec:
             cc.tecnologia = nuova_tec
@@ -253,10 +335,15 @@ def generate_one(cc_id):
         if out.get("flag") in ("OK", "Correzione", "Verifica", "Sensibile"):
             cc.flag = out["flag"]
         cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
+        cc.qualita_note = "; ".join(problemi) or None
+        cc.ai_modello = AI_STATE.get("model")
         em = (con.email if con else "") or ""
-        cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
+        # Sotto soglia resta Bozza: non puo' partire per sbaglio.
+        cc.draft_status = ("Pronta" if (cc.contesto and cc.gancio and em and not problemi)
+                           else "Bozza")
         db.commit()
-        return "Personalizzazione aggiornata"
+        return ("Personalizzazione aggiornata" if not problemi
+                else "Aggiornata ma sotto standard: " + "; ".join(problemi))
     except QuotaExhausted as e:
         return str(e)
     except Exception as e:
@@ -272,7 +359,7 @@ def run_generate(rows):
     from app.email_builder import build_apertura
     with AI_LOCK:
         AI_STATE.update(running=True, total=len(rows), done=0, current="",
-                        error="", quota=False, generated=0)
+                        error="", quota=False, generated=0, sotto_soglia=0)
     db = SessionLocal()
     try:
         correzioni = learning.carica_correzioni(db)
@@ -285,7 +372,7 @@ def run_generate(rows):
             esempi = learning.blocco_prompt(
                 learning.esempi_validi(correzioni, row.get("cutoff")))
             try:
-                out = generate_personalization(data, esempi)
+                out, problemi = genera_con_soglia(data, esempi)
             except QuotaExhausted as e:
                 with AI_LOCK:
                     AI_STATE["quota"] = True
@@ -307,13 +394,19 @@ def run_generate(rows):
                 if out.get("flag") in ("OK", "Correzione", "Verifica", "Sensibile"):
                     cc.flag = out["flag"]
                 cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
+                cc.qualita_note = "; ".join(problemi) or None
+                cc.ai_modello = AI_STATE.get("model")
                 con = db.get(models.Contact, cc.contact_id) if cc.contact_id else None
                 em = (con.email if con else "") or ""
-                cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
+                # Sotto soglia resta Bozza: non puo' partire per sbaglio.
+                cc.draft_status = ("Pronta" if (cc.contesto and cc.gancio and em
+                                                and not problemi) else "Bozza")
                 db.commit()
                 with AI_LOCK:
                     AI_STATE["done"] += 1
                     AI_STATE["generated"] += 1
+                    if problemi:
+                        AI_STATE["sotto_soglia"] = AI_STATE.get("sotto_soglia", 0) + 1
     finally:
         db.close()
         with AI_LOCK:
