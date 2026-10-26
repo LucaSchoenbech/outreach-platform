@@ -45,7 +45,10 @@ LOGO = _STATIC_LOGO if _STATIC_LOGO.exists() else _WIN_LOGO
 
 SUBJECT = "Mappatura di mercato e competenze — {TECNOLOGIA}"
 
-APERTURA_BASE = "sono Luca Roberto Schoenbech"
+# L'etichetta ripete quella della firma e del sito (TALENT SOURCING
+# ADVISORY): apertura, firma e sito dicono la stessa cosa, invece di
+# presentare due qualifiche diverse nella stessa email.
+APERTURA_BASE = "sono Luca Roberto Schoenbech, Talent Sourcing Advisor"
 
 CORPO = """Attraverso filiere diverse di proposito: le stesse competenze su {TECNOLOGIA} pesano in modo diverso {FILIERE_ESEMPIO}, e questo si riconosce solo avendole viste in più contesti. È un punto di osservazione da affiancare a quello che avete dall’interno.
 
