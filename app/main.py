@@ -628,6 +628,41 @@ def genera_ai(cid: str, user=Depends(require_user)):
     return RedirectResponse(f"/campaign/{cid}", status_code=303)
 
 
+@app.post("/campaign/{cid}/controlla-qualita")
+def controlla_qualita(cid: str, user=Depends(require_user)):
+    """Misura le righe gia' in campagna con la soglia di qualita', senza AI.
+
+    La soglia nasce dentro la generazione: le righe prodotte prima non sono mai
+    state misurate e restano Pronte anche se generiche. Questo passaggio le
+    guarda tutte, non consuma credito perche' non chiama nessun provider, e
+    riporta in Bozza quelle sotto standard — con scritto che cosa manca.
+    """
+    db = SessionLocal()
+    misurate = sotto = 0
+    try:
+        camp = db.get(models.Campaign, cid)
+        if not camp:
+            return RedirectResponse("/", status_code=303)
+        for cc in db.query(models.CampaignCompany).filter_by(campaign_id=camp.campaign_id).all():
+            if cc.draft_status == "Esclusa":
+                continue
+            if not (cc.contesto or "").strip() and not (cc.gancio or "").strip():
+                continue   # riga ancora vuota: non c'e' nulla da misurare
+            problemi = ai.problemi_riga(cc)
+            misurate += 1
+            cc.qualita_note = "; ".join(problemi) or None
+            if problemi:
+                sotto += 1
+                if cc.draft_status == "Pronta":
+                    cc.draft_status = "Bozza"
+        db.commit()
+    finally:
+        db.close()
+    return RedirectResponse(
+        f"/campaign/{cid}?msg=Qualita+controllata+su+{misurate}+righe:+{sotto}+sotto+standard",
+        status_code=303)
+
+
 @app.get("/ai/status")
 def ai_status(user=Depends(require_user)):
     with ai.AI_LOCK:
@@ -687,6 +722,8 @@ def set_stato(cc_id: str, stato: str = Form("Bozza"), back: str = Form("/"), use
         cc = db.get(models.CampaignCompany, cc_id)
         if cc and stato in ("Bozza", "Pronta", "Esclusa"):
             cc.draft_status = stato
+            if stato == "Pronta":
+                cc.qualita_note = None   # messa Pronta a mano: l'hai approvata tu
             db.commit()
     finally:
         db.close()
@@ -730,6 +767,9 @@ def set_apertura(cc_id: str, saluto: str = Form(""), contesto: str = Form(""), g
             cc.tecnologia = tecnologia.strip()
             cc.appiglio = appiglio.strip()
             cc.paragrafo_apertura = build_apertura(cc.contesto or "", cc.gancio or "")
+            # Il testo riscritto a mano non lo giudica la soglia: la soglia
+            # misura l'AI, non te.
+            cc.qualita_note = None
             con = db.get(models.Contact, cc.contact_id) if cc.contact_id else None
             em = (con.email if con else "") or ""
             cc.draft_status = "Pronta" if (cc.contesto and cc.gancio and em) else "Bozza"
@@ -937,11 +977,14 @@ def _row_from_cc(db, cc, camp):
 
 
 def _partiziona_pronte(db, camp):
-    """Divide le righe Pronte fra (da_inviare, gia_contattati).
+    """Divide le righe Pronte fra (da_inviare, bloccate).
 
-    Il controllo sui duplicati vive QUI, al momento dell'invio, e non solo
-    all'import: cosi' vale per qualunque riga, anche per i file caricati
-    prima che il controllo esistesse.
+    Due controlli vivono QUI, al momento dell'invio, e non solo all'import:
+    i duplicati e la soglia di qualita'. Cosi' valgono per qualunque riga,
+    anche per i file caricati prima che i controlli esistessero.
+
+    Niente e' silenzioso: ogni riga bloccata torna con il suo motivo e la
+    pagina di invio la elenca.
     """
     out, bloccati = [], []
     for cc in db.query(models.CampaignCompany).filter_by(campaign_id=camp.campaign_id).all():
@@ -958,12 +1001,24 @@ def _partiziona_pronte(db, camp):
         precedente = learning.gia_contattato(db, con.email, camp.campaign_id)
         if precedente:
             quando, campagna = precedente
+            data_txt = quando.strftime("%d/%m/%Y") if quando else "data sconosciuta"
             bloccati.append({
                 "cc_id": str(cc.campaign_company_id),
                 "azienda": comp.legal_name if comp else "",
                 "email": con.email,
-                "quando": quando.strftime("%d/%m/%Y") if quando else "",
-                "campagna": campagna or "",
+                "motivo": (f"Gia' contattato il {data_txt}"
+                           + (f" (campagna \u00ab{campagna}\u00bb)" if campagna else "")),
+            })
+            continue
+        # Sotto standard non parte: un'email generica vale meno di una non
+        # spedita. La nota la scrive la generazione AI o il controllo in blocco,
+        # e la cancella una correzione a mano o un "Pronta" messo da te.
+        if (cc.qualita_note or "").strip():
+            bloccati.append({
+                "cc_id": str(cc.campaign_company_id),
+                "azienda": comp.legal_name if comp else "",
+                "email": con.email,
+                "motivo": "Sotto standard: " + cc.qualita_note.strip(),
             })
             continue
         out.append(_row_from_cc(db, cc, camp))

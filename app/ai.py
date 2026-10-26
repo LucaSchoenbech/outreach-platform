@@ -156,6 +156,17 @@ def valuta_qualita(out):
     return (not problemi), problemi
 
 
+def problemi_riga(cc):
+    """Misura una riga gia' a database con la stessa soglia, senza chiamare l'AI.
+
+    Serve alle righe prodotte prima che la soglia esistesse: senza questo, una
+    riga debole generata ieri resta Pronta per sempre, perche' il controllo
+    vive solo nel momento della generazione.
+    """
+    return valuta_qualita({"tecnologia": cc.tecnologia, "contesto": cc.contesto,
+                           "gancio": cc.gancio, "flag": cc.flag})[1]
+
+
 _RICHIAMO = (
     "\n\nATTENZIONE: la risposta precedente non raggiungeva lo standard richiesto "
     "({problemi}). Riscrivi usando gli elementi concreti presenti nei dati "

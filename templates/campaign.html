@@ -78,8 +78,19 @@
           Genera personalizzazione AI ({{ n_ricerca }})
         </button>
       </form>
+      <form method="post" action="/campaign/{{ camp.campaign_id }}/controlla-qualita"
+            onsubmit="return confirm('Controllare il livello di dettaglio di tutte le righe? Non chiama l\'AI e non consuma credito. Le righe sotto standard tornano in Bozza.');">
+        <button class="btn sm" type="submit"
+                title="Misura le righe gia' generate con la stessa soglia della generazione, senza chiamare l'AI">
+          Controlla qualita'
+        </button>
+      </form>
       <span class="muted" id="ai-info"></span>
     </div>
+    <p class="hint">Il <b>controllo qualita'</b> serve alle righe generate prima che la soglia esistesse:
+      le misura tutte senza consumare credito e riporta in Bozza quelle generiche.
+      Una riga sotto standard <b>non parte</b>, nemmeno se Pronta. Se il testo lo scrivi o lo correggi tu,
+      la soglia non lo giudica.</p>
     {% if n_ricerca == 0 %}
       <div class="hint" style="margin-top:8px">Nessuna riga da elaborare: importa il file con le colonne Attività, Competenze, Segnale, Alert — oppure compila Settore/Profili (l'AI può comunque variarli).</div>
     {% endif %}
