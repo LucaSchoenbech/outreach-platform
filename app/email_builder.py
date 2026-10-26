@@ -50,7 +50,7 @@ SUBJECT = "Mappatura di mercato e competenze — {TECNOLOGIA}"
 # presentare due qualifiche diverse nella stessa email.
 APERTURA_BASE = "sono Luca Roberto Schoenbech, Talent Sourcing Advisor"
 
-CORPO = """Attraverso filiere diverse di proposito: le stesse competenze su {TECNOLOGIA} pesano in modo diverso {FILIERE_ESEMPIO}, e questo si riconosce solo avendole viste in più contesti. È un punto di osservazione da affiancare a quello che avete dall’interno.
+CORPO = """Lavoro e mi confronto con filiere diverse per cercare punti di incontro o differenze: le stesse competenze su {TECNOLOGIA} pesano in modo diverso {FILIERE_ESEMPIO}, e questo si riconosce solo avendole viste attraverso più contesti. Potrebbe essere un punto di osservazione supportivo, da affiancare a quello che avete dall’interno.
 
 Dove serve, la ricerca di una persona è uno degli esiti possibili, non il presupposto.
 
@@ -320,9 +320,38 @@ def aggiorna_paragrafo_esempi(testo):
     return "".join(parti)
 
 
+# Il paragrafo sulle filiere era stato accorciato rispetto al testo scritto da
+# Luca, perdendo per strada il motivo per cui si attraversano filiere diverse
+# ("cercare punti di incontro o differenze") e il tono di proposta
+# ("potrebbe essere", "supportivo"). Questa e' la versione sua, e vale anche
+# sui testi gia' salvati da /testo.
+PARAGRAFO_FILIERE = (
+    "Lavoro e mi confronto con filiere diverse per cercare punti di incontro o "
+    "differenze: le stesse competenze su {TECNOLOGIA} pesano in modo diverso "
+    "{FILIERE_ESEMPIO}, e questo si riconosce solo avendole viste attraverso "
+    "pi\u00f9 contesti. Potrebbe essere un punto di osservazione supportivo, da "
+    "affiancare a quello che avete dall\u2019interno."
+)
+
+# Apertura inconfondibile della versione accorciata. Un paragrafo riscritto da
+# te non la contiene, quindi non viene toccato.
+_TRACCIA_FILIERE_VECCHIA = re.compile(r"Attraverso filiere diverse di proposito", re.I)
+
+
+def aggiorna_paragrafo_filiere(testo):
+    """Rimette il paragrafo sulle filiere nella forma scritta da Luca."""
+    if not testo:
+        return testo
+    parti = re.split(r"(\n\s*\n)", str(testo))
+    for i, par in enumerate(parti):
+        if _TRACCIA_FILIERE_VECCHIA.search(par):
+            parti[i] = PARAGRAFO_FILIERE
+    return "".join(parti)
+
+
 def normalizza_testo(testo):
     """Tutte le correzioni strutturali sul testo di un'email, in un punto solo."""
-    return aggiorna_paragrafo_esempi(normalizza_link(testo))
+    return aggiorna_paragrafo_filiere(aggiorna_paragrafo_esempi(normalizza_link(testo)))
 
 
 def get_email_template():
