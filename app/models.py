@@ -93,7 +93,11 @@ class CampaignCompany(Base):
     contact_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("contact.contact_id"))
     status: Mapped[str] = mapped_column(Text, default="discovered", nullable=False)
 
-    draft_status: Mapped[str] = mapped_column(Text, default="Bozza", nullable=False)  # Bozza|Pronta|Esclusa
+    draft_status: Mapped[str] = mapped_column(Text, default="Bozza", nullable=False)
+    # Perche' la riga e' Esclusa (es. "Gia' contattato il ..."). La colonna
+    # esiste a database da sempre: tolta dal modello per errore in 501b5b5,
+    # il che faceva fallire la pagina campagna con AttributeError.
+    escluso_motivo: Mapped[str | None] = mapped_column(Text)  # Bozza|Pronta|Esclusa
     tecnologia: Mapped[str | None] = mapped_column(Text)
     appiglio: Mapped[str | None] = mapped_column(Text)
     contesto: Mapped[str | None] = mapped_column(Text)
@@ -101,6 +105,10 @@ class CampaignCompany(Base):
     # ultima proposta AI, conservata per riconoscere le correzioni manuali
     contesto_ai: Mapped[str | None] = mapped_column(Text)
     gancio_ai: Mapped[str | None] = mapped_column(Text)
+    # Esito della soglia di qualita': quando l'AI resta sotto standard anche
+    # al secondo tentativo, la riga non diventa Pronta e porta scritto perche'.
+    qualita_note: Mapped[str | None] = mapped_column(Text)
+    ai_modello: Mapped[str | None] = mapped_column(Text)
     tipo_gancio: Mapped[str | None] = mapped_column(Text)
     timing: Mapped[str | None] = mapped_column(Text)
     flag: Mapped[str | None] = mapped_column(Text)

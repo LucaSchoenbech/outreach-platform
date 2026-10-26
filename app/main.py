@@ -327,6 +327,7 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
                 "tipo_gancio": cc.tipo_gancio or "", "gancio": cc.gancio or "",
                 "stato": cc.draft_status or "Bozza",
                 "motivo": cc.escluso_motivo or "",
+                "qualita_note": cc.qualita_note or "",
                 "risposto": con.risposto_at if con else None,
                 "risposta_oggetto": (con.risposta_oggetto if con else "") or "",
             })
@@ -340,6 +341,7 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
                         if (cc.ricerca_attivita or cc.ricerca_competenze
                             or cc.ricerca_segnale or cc.alert_text
                             or (cc.contesto or "").strip() or (cc.gancio or "").strip()))
+        n_sotto_soglia = sum(1 for r in rows if r["qualita_note"])
         n_correzioni = learning.conta_correzioni(db)
         n_risposte = replies.conta_risposte(db, camp.campaign_id)
     finally:
@@ -347,7 +349,7 @@ def campaign_detail(request: Request, cid: str, user=Depends(require_user)):
     return templates.TemplateResponse(request, "campaign.html", {
         "camp": camp, "rows": rows, "counts": counts, "tot": len(rows),
         "n_ready": len(ready), "n_due": len(due), "n_ricerca": n_ricerca,
-        "n_correzioni": n_correzioni, "n_risposte": n_risposte,
+        "n_correzioni": n_correzioni, "n_sotto_soglia": n_sotto_soglia, "n_risposte": n_risposte,
         "ai_state": ai.AI_STATE, "user": user,
     })
 
