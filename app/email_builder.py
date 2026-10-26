@@ -519,6 +519,10 @@ def build_email_html(row, logo="/logo.png", message_no=1, tpl=None):
     corpo = _corpo_html(_sostituisci_dati(t.get("corpo") or CORPO, row))
     saluto = str(row.get("saluto", ""))
     appiglio = str(row.get("appiglio") or "").strip()
+    # La pagina costruita qui NON si chiama "html": in questa funzione serve il
+    # modulo html per l'escape dell'appiglio, e una variabile con lo stesso nome
+    # lo renderebbe inaccessibile. Con l'appiglio compilato la costruzione
+    # falliva, l'invio registrava un errore e la riga restava bruciata.
     appiglio_p = (f'<p style="margin:0 0 20px 0;">{html.escape(appiglio)}</p>'
                   if appiglio else "")
     if message_no == 2:
@@ -526,19 +530,19 @@ def build_email_html(row, logo="/logo.png", message_no=1, tpl=None):
         recall = (_sostituisci_dati(_plain(t.get("recall_text") or RECALL_TEXT), row)
                   .replace(chr(10), "<br>"))
         recall = _sostituisci_link_html(recall)
-        html = (HTML_TOP
-                + f'<p style="margin:0 0 20px 0;">{recall}</p></div>'
-                + HTML_FIRMA
-                + '<div style="font-size:16px;line-height:1.65;margin-left:10px;max-width:680px;margin-top:18px;">'
-                + '<hr style=\'border:0;border-top:1px solid #ccc;margin:16px 0\'>'
-                + '<p style="margin:0 0 20px 0;"><b>----- MESSAGGIO ORIGINALE -----</b></p>'
-                + f'<p style="margin:0 0 20px 0;">{saluto}, {ricordato},</p>'
-                + appiglio_p + intro_p + corpo + HTML_SALUTI + "</div>"
-                + HTML_FIRMA
-                + HTML_FOOTER)
+        pagina = (HTML_TOP
+                  + f'<p style="margin:0 0 20px 0;">{recall}</p></div>'
+                  + HTML_FIRMA
+                  + '<div style="font-size:16px;line-height:1.65;margin-left:10px;max-width:680px;margin-top:18px;">'
+                  + '<hr style=\'border:0;border-top:1px solid #ccc;margin:16px 0\'>'
+                  + '<p style="margin:0 0 20px 0;"><b>----- MESSAGGIO ORIGINALE -----</b></p>'
+                  + f'<p style="margin:0 0 20px 0;">{saluto}, {ricordato},</p>'
+                  + appiglio_p + intro_p + corpo + HTML_SALUTI + "</div>"
+                  + HTML_FIRMA
+                  + HTML_FOOTER)
     else:
-        html = HTML_TOP + appiglio_p + intro_p + corpo + HTML_CHIUSURA + HTML_FIRMA + HTML_FOOTER
-    return (html
+        pagina = HTML_TOP + appiglio_p + intro_p + corpo + HTML_CHIUSURA + HTML_FIRMA + HTML_FOOTER
+    return (pagina
             .replace("__SALUTO__", saluto)
             .replace("__BUONGIORNO__", saluto_orario())
             .replace("__LOGO__", logo))
